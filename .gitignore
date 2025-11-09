@@ -1,0 +1,61 @@
+# Unity-generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/
+MemoryCaptures/
+Recordings/
+
+# IDE and editor settings
+.vscode/
+.idea/
+.vs/
+*.code-workspace
+
+# Unity artifacts
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Crash and debug
+*.stacktrace
+*.log
+*.ds_store
+[Tt]humbs.db
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+*.unitypackage
+*.app
+*.exe
+*.dll
+*.so
+*.dylib
+*.bundle
+
+# Package manager cache
+Packages/*/package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Misc
+.DS_Store
+*.swp
+*.tmp
