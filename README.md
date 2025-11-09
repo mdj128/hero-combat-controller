@@ -1,7 +1,9 @@
 # Hero Combat Controller (UPM)
 
-A drop-in third-person combat controller for Unity 2021.3+ that ships with runtime scripts, NPC AI, auto-wiring editor tooling, and reusable HUD/animation assets. This folder is self-contained so you can move it into its own Git repository and distribute it as a Unity Package Manager (UPM) package.
+A drop-in third-person combat controller for Unity 6000.2+ that ships with runtime scripts, NPC AI, auto-wiring editor tooling, and reusable HUD/animation assets. This folder is self-contained so you can move it into its own Git repository and distribute it as a Unity Package Manager (UPM) package.
 
+![alt text](auto-wire.png)
+![alt text](combat.png)
 ## Contents
 
 - **Runtime** – `HeroCharacterController`, combat agent, NPC AI, floating combat text, world-space health bars, prefabs, and the shared animator controller.
