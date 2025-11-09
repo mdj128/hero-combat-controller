@@ -2,13 +2,13 @@
   "name": "com.herocharacter.herocombat",
   "displayName": "Hero Combat Controller",
   "version": "1.0.0",
-  "unity": "2021.3",
+  "unity": "6000.2",
   "description": "Hero combat controller, NPC brains, floating combat text, HUD prefab, and editor auto-wiring tools.",
   "keywords": ["hero", "combat", "controller", "npc", "hud"],
   "category": "Gameplay",
   "author": {
-    "name": "Hero Character Contributors",
-    "url": "https://github.com/your-org/hero-combat"
+    "name": "budorf",
+    "url": "https://github.com/mdj128/hero-combat-controller"
   },
   "dependencies": {
     "com.unity.inputsystem": "1.5.0"
