@@ -2,8 +2,11 @@
 
 A drop-in third-person combat controller for Unity 6000.2+ that ships with runtime scripts, NPC AI, auto-wiring editor tooling, and reusable HUD/animation assets. This folder is self-contained so you can move it into its own Git repository and distribute it as a Unity Package Manager (UPM) package.
 
+A full walkthrough with install and usage instructions can be found here: https://www.youtube.com/watch?v=a9bhad6asYA
+
 ![alt text](auto-wire.png)
 ![alt text](combat.png)
+
 ## Contents
 
 - **Runtime** – `HeroCharacterController`, combat agent, NPC AI, floating combat text, world-space health bars, prefabs, and the shared animator controller.
@@ -12,11 +15,11 @@ A drop-in third-person combat controller for Unity 6000.2+ that ships with runti
 
 ## Install (UPM)
 
-1. Move `Packages/com.herocharacter.herocombat` into its own repository (or keep it as an embedded package).
-2. Add a `package.json` to the repository root (already included) and push to GitHub.
-3. In other projects, open `Packages/manifest.json` and add:
+1. Open Unity Package Manager (Window->Package Management->Package Manager)
+2. Click the "+" icon in the upper left, and choose "Install package from git URL"
+3. Paste this URL into the field and Click install
    ```json
-   "com.herocharacter.herocombat": "https://github.com/your-org/hero-combat.git#1.0.0"
+   "https://github.com/mdj128/hero-combat-controller.git"
    ```
 4. Unity will import the runtime/editor assemblies automatically. Enable the Input System package if it isn’t already installed.
 
