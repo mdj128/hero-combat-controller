@@ -144,10 +144,16 @@ namespace HeroCharacter
             if (body != null)
             {
 #if UNITY_6000_0_OR_NEWER
-                return body.linearVelocity;
+                if (!body.isKinematic) { return body.linearVelocity; }
 #else
-                return body.velocity;
+                if (!body.isKinematic) { return body.velocity; }
 #endif
+                float dt = Time.deltaTime;
+                if (dt <= Mathf.Epsilon)
+                {
+                    return Vector3.zero;
+                }
+                return (transform.position - lastPosition) / dt;
             }
 
             float deltaTime = Time.deltaTime;

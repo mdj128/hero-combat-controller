@@ -43,6 +43,16 @@ namespace HeroCharacter
         [SerializeField] Vector3 floatingTextOffset = new Vector3(0f, 2.1f, 0f);
         [SerializeField] Color floatingTextColor = new Color(0.235f, 0.776f, 0.851f, 1f);
 
+        [Header("Collision")]
+        [SerializeField] bool ignoreTargetCollisions = true;
+
+        [Header("Grounding")]
+        [SerializeField] bool snapToGround = true;
+        [SerializeField] LayerMask groundMask = Physics.DefaultRaycastLayers;
+        [SerializeField] float groundCheckDistance = 2f;
+        [SerializeField] float groundOffset = 0.02f;
+        [SerializeField] float groundSnapSpeed = 15f;
+
         const int CurrentHealthBarConfigVersion = 1;
 
         CharacterCombatAgent combatAgent;
@@ -54,10 +64,18 @@ namespace HeroCharacter
         NpcWorldspaceHealthBar healthBar;
         FloatingCombatTextSpawner floatingText;
         Vector3 lastTargetPosition;
+        Rigidbody body;
 
         void Awake()
         {
             combatAgent = GetComponent<CharacterCombatAgent>();
+            body = GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.interpolation = RigidbodyInterpolation.Interpolate;
+                body.constraints = RigidbodyConstraints.FreezeRotation;
+                body.isKinematic = true; // driven manually for reliable collisions
+            }
             spawnPosition = transform.position;
             EnsureHealthBar();
             EnsureFloatingText();
@@ -117,13 +135,30 @@ namespace HeroCharacter
             if (flatDirection.sqrMagnitude > Mathf.Epsilon)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(flatDirection.normalized, Vector3.up);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * turnSpeed);
+                RotateNpc(Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * turnSpeed));
             }
 
             if (enableMovement && sqrDistance > Mathf.Epsilon)
             {
                 float distance = Mathf.Sqrt(sqrDistance);
-                float desiredStopDistance = Mathf.Max(attackRange - stoppingBuffer, 0.8f);
+                float selfRadius = 0.35f;
+                float targetRadius = 0.35f;
+
+                var selfCapsule = GetComponent<CapsuleCollider>();
+                if (selfCapsule != null)
+                {
+                    float axisScale = Mathf.Max(Mathf.Abs(selfCapsule.transform.lossyScale.x), Mathf.Abs(selfCapsule.transform.lossyScale.z));
+                    selfRadius = selfCapsule.radius * axisScale;
+                }
+
+                var targetCapsule = targetTransform != null ? targetTransform.GetComponentInParent<CapsuleCollider>() : null;
+                if (targetCapsule != null)
+                {
+                    float axisScale = Mathf.Max(Mathf.Abs(targetCapsule.transform.lossyScale.x), Mathf.Abs(targetCapsule.transform.lossyScale.z));
+                    targetRadius = targetCapsule.radius * axisScale;
+                }
+
+                float desiredStopDistance = Mathf.Max(attackRange - stoppingBuffer, selfRadius + targetRadius + 0.1f);
                 if (distance > desiredStopDistance)
                 {
                     Vector3 targetPos = targetTransform.position;
@@ -144,7 +179,7 @@ namespace HeroCharacter
                     float remaining = distance - desiredStopDistance;
                     Vector3 desiredPosition = targetPos - moveDir * desiredStopDistance;
                     Vector3 newPosition = Vector3.MoveTowards(transform.position, desiredPosition, speed * Time.deltaTime);
-                    transform.position = new Vector3(newPosition.x, transform.position.y, newPosition.z);
+                    MoveNpc(new Vector3(newPosition.x, transform.position.y, newPosition.z));
                     // refresh distance for attack check so we don't instantly stop before entering range
                     toTarget = targetTransform.position - transform.position;
                     sqrDistance = toTarget.sqrMagnitude;
@@ -153,8 +188,13 @@ namespace HeroCharacter
                 {
                     Vector3 moveDir = -flatDirection.normalized;
                     float step = Mathf.Min(walkSpeed * Time.deltaTime, desiredStopDistance - distance);
-                    transform.position += moveDir * step;
+                    MoveNpc(transform.position + moveDir * step);
                 }
+            }
+
+            if (snapToGround)
+            {
+                SnapToGround();
             }
 
             if (sqrDistance <= attackRange * attackRange)
@@ -175,6 +215,7 @@ namespace HeroCharacter
             if (damageable is Component component)
             {
                 targetTransform = component.transform;
+                ToggleIgnoreCollisionWithTarget(ignoreTargetCollisions);
             }
             else
             {
@@ -243,17 +284,91 @@ namespace HeroCharacter
             {
                 SetTarget(hero);
             }
-#if UNITY_EDITOR
-            Gizmos.color = new Color(1f, 0f, 1f, 0.4f);
-            Gizmos.DrawWireSphere(spawnPosition == Vector3.zero ? transform.position : spawnPosition, leashRange);
-#endif
         }
 
         void ClearTarget()
         {
+            ToggleIgnoreCollisionWithTarget(false);
             currentTarget = null;
             targetTransform = null;
             lastAttackTime = float.NegativeInfinity;
+        }
+
+        void ToggleIgnoreCollisionWithTarget(bool ignore)
+        {
+            if (!ignore)
+            {
+                // ensure any previously ignored pairs are re-enabled
+                ignore = false;
+            }
+
+            if (targetTransform == null)
+            {
+                return;
+            }
+
+            var myColliders = GetComponentsInChildren<Collider>(true);
+            var targetColliders = targetTransform.GetComponentsInParent<Collider>(true);
+            if (myColliders == null || targetColliders == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < myColliders.Length; i++)
+            {
+                var mine = myColliders[i];
+                if (mine == null)
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < targetColliders.Length; j++)
+                {
+                    var other = targetColliders[j];
+                    if (other == null || mine == other)
+                    {
+                        continue;
+                    }
+
+                    Physics.IgnoreCollision(mine, other, ignore);
+                }
+            }
+        }
+
+        void SnapToGround()
+        {
+            Vector3 origin = transform.position + Vector3.up * Mathf.Max(groundCheckDistance * 0.25f, 0.2f);
+            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, groundCheckDistance, groundMask, QueryTriggerInteraction.Ignore))
+            {
+                float desiredY = hit.point.y + groundOffset;
+                Vector3 pos = transform.position;
+                pos.y = Mathf.MoveTowards(pos.y, desiredY, groundSnapSpeed * Time.deltaTime);
+                MoveNpc(pos);
+            }
+        }
+
+        void MoveNpc(Vector3 worldPosition)
+        {
+            if (body != null && body.isKinematic)
+            {
+                body.MovePosition(worldPosition);
+            }
+            else
+            {
+                transform.position = worldPosition;
+            }
+        }
+
+        void RotateNpc(Quaternion rotation)
+        {
+            if (body != null && body.isKinematic)
+            {
+                body.MoveRotation(rotation);
+            }
+            else
+            {
+                transform.rotation = rotation;
+            }
         }
 
         void EnsureHealthBar()
@@ -349,8 +464,8 @@ namespace HeroCharacter
             if (sqrDistance <= 0.01f)
             {
                 returningToSpawn = false;
-                transform.position = spawnPosition;
-                transform.rotation = Quaternion.identity;
+                MoveNpc(spawnPosition);
+                RotateNpc(Quaternion.identity);
                 return;
             }
 
@@ -358,19 +473,19 @@ namespace HeroCharacter
             if (flat.sqrMagnitude > Mathf.Epsilon)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * turnSpeed);
+                RotateNpc(Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * turnSpeed));
             }
 
             float distance = Mathf.Sqrt(sqrDistance);
             float step = returnSpeed * Time.deltaTime;
             if (step >= distance)
             {
-                transform.position = spawnPosition;
+                MoveNpc(spawnPosition);
                 returningToSpawn = false;
                 return;
             }
 
-            transform.position += flat.normalized * step;
+            MoveNpc(transform.position + flat.normalized * step);
         }
 
 #if UNITY_6000_0_OR_NEWER
