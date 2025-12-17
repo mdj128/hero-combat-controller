@@ -13,7 +13,7 @@ namespace HeroCharacter
         [SerializeField] bool autoTargetHero = true;
         [SerializeField] HeroCharacterController heroTargetOverride;
         [SerializeField] float acquireRange = 5f;
-        [SerializeField] float attackRange = 1.9f;
+        [SerializeField] float attackRange = 2.5f;
         [SerializeField] float turnSpeed = 8f;
         [SerializeField] float leashRange = 10f;
         [SerializeField] float returnSpeed = 3f;
@@ -24,7 +24,7 @@ namespace HeroCharacter
         [SerializeField] float walkSpeed = 1.5f;
         [SerializeField] float sprintSpeed = 3f;
         [SerializeField] float sprintDistance = 3f;
-        [SerializeField] float stoppingBuffer = 0.35f;
+        [SerializeField] float stoppingBuffer = 0.4f;
 
         [Header("Damage")]
         [SerializeField] float damageScale = 1f;
