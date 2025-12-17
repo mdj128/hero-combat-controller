@@ -37,6 +37,14 @@ A full walkthrough with install and usage instructions can be found here: https:
 - Press the **Interact** input (default action name `Interact`) while looking at an object on the interactable layer. The controller sphere-casts from the crosshair’s viewport anchor (default 0.55, 0.52) so it lines up with an over-the-shoulder reticle.
 - Add `HeroInteractableObject` to any GameObject to fire UnityEvents when the hero interacts, or implement `IHeroInteractable` for custom behaviour.
 - Movement now supports over‑the‑shoulder strafing/backpedal by default (`Movement → Face Camera Forward`). Disable that toggle if you prefer turn-in-place locomotion.
+- Animation controller: use `Runtime/Animation/HeroCombatAnimator2.controller` to get the 2D MoveX/MoveY blend trees for full directional walk/run (strafe/backpedal) support.
+
+## Release Notes
+
+### 1.1.0
+- Added HeroCombatAnimator2.controller with 2D MoveX/MoveY locomotion blends.
+- Crosshair anchor offset and interaction ray now match over-the-shoulder framing.
+- Strafing/backpedal defaults enabled; look ease-in option added to reduce camera bounce on start.
 
 ## Requirements
 
