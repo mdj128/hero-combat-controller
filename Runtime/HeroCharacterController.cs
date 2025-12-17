@@ -60,6 +60,7 @@ namespace HeroCharacter
         bool requiredActionsMissingLogged;
 
         float yaw;
+        float yawDeltaThisFrame;
         float pitch;
         float cameraDistance;
         float lookRampTimer;
@@ -914,9 +915,11 @@ namespace HeroCharacter
                     break;
             }
 
+            float prevYaw = yaw;
             yaw += adjustedLook.x * sensitivity * deltaTime;
             pitch -= adjustedLook.y * sensitivity * deltaTime;
             pitch = Mathf.Clamp(pitch, -cameraSettings.verticalRotationRange * 0.5f, cameraSettings.verticalRotationRange * 0.5f);
+            yawDeltaThisFrame = deltaTime > kSmallNumber ? Mathf.DeltaAngle(prevYaw, yaw) / deltaTime : 0f;
 
             float targetDistance = Mathf.Clamp(cameraSettings.thirdPersonDistance - zoomInput * cameraSettings.zoomSensitivity, cameraSettings.minThirdPersonDistance, cameraSettings.maxCameraDistance);
             cameraSettings.thirdPersonDistance = targetDistance;
@@ -1070,6 +1073,16 @@ namespace HeroCharacter
             // Use local velocity so run/walk blend trees see real movement speed (covers sprint magnitudes).
             float forwardParam = Mathf.Clamp(localPlanarVelocity.z, -10f, 10f);
             float strafeParam = Mathf.Clamp(localPlanarVelocity.x, -10f, 10f);
+
+            // If turning in place (mouse-look with little/no translation), nudge the blend tree so feet shuffle instead of staying idle.
+            bool turningInPlace = velocity < animationSettings.velocityEpsilon && Mathf.Abs(yawDeltaThisFrame) > 10f;
+            if (turningInPlace && Mathf.Abs(forwardParam) < 0.05f && Mathf.Abs(strafeParam) < 0.05f)
+            {
+                float turnScale = Mathf.Clamp(yawDeltaThisFrame / 180f, -0.5f, 0.5f);
+                strafeParam = turnScale * 0.6f;   // lean more into sideways motion
+                forwardParam = 0.2f * Mathf.Sign(turnScale); // small forward/back component for foot shuffle
+                velocity = Mathf.Max(velocity, movement.walkingSpeed * 0.25f);
+            }
 
             TrySetFloat(anim, animationSettings.velocityFloat, velocity, deltaTime);
             TrySetFloatImmediate(anim, animationSettings.forwardVelocityFloat, forwardParam);
