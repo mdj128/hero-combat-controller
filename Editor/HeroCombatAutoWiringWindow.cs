@@ -642,6 +642,7 @@ namespace HeroCharacter.Editor
     {
         static readonly string[] WeaponKeywords = { "sword", "weapon", "blade", "axe", "hand_r", "r_hand", "right_hand", "righthand", "mixamorig:righthand" };
         const string HeroAnimatorPath = "Packages/com.herocharacter.herocombat/Runtime/Animation/HeroCombatAnimator.controller";
+        const string DefaultInputAssetPath = "Assets/HeroCharacter/HeroCombatInputActions.asset";
 
         public static GameObject InstantiateAsset(GameObject asset, Vector3 position)
         {
@@ -665,6 +666,13 @@ namespace HeroCharacter.Editor
 
         public static InputActionAsset FindDefaultInputAsset()
         {
+            // Prefer a package-provided project-local default that we can create/edit.
+            var defaultAsset = GetOrCreateDefaultInputAsset();
+            if (defaultAsset != null)
+            {
+                return defaultAsset;
+            }
+
             string[] guids = AssetDatabase.FindAssets("t:InputActionAsset");
             foreach (var guid in guids)
             {
@@ -682,6 +690,79 @@ namespace HeroCharacter.Editor
             }
 
             return null;
+        }
+
+        static InputActionAsset GetOrCreateDefaultInputAsset()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<InputActionAsset>(DefaultInputAssetPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var folder = System.IO.Path.GetDirectoryName(DefaultInputAssetPath);
+            if (!string.IsNullOrEmpty(folder) && !AssetDatabase.IsValidFolder(folder))
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/HeroCharacter"))
+                {
+                    if (!AssetDatabase.IsValidFolder("Assets"))
+                    {
+                        return null;
+                    }
+                    AssetDatabase.CreateFolder("Assets", "HeroCharacter");
+                }
+            }
+
+            var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+            asset.name = "HeroCombatInputActions";
+
+            var map = new InputActionMap("Player");
+
+            var move = map.AddAction("Move", InputActionType.Value, expectedControlType: "Vector2");
+            move.AddCompositeBinding("2DVector")
+                .With("Up", "<Keyboard>/w")
+                .With("Down", "<Keyboard>/s")
+                .With("Left", "<Keyboard>/a")
+                .With("Right", "<Keyboard>/d");
+            move.AddBinding("<Gamepad>/leftStick");
+
+            var look = map.AddAction("Look", InputActionType.Value, expectedControlType: "Vector2");
+            look.AddBinding("<Mouse>/delta");
+            look.AddBinding("<Gamepad>/rightStick");
+
+            var zoom = map.AddAction("Zoom", InputActionType.Value, expectedControlType: "Axis");
+            zoom.AddBinding("<Mouse>/scroll/y");
+
+            var jump = map.AddAction("Jump", InputActionType.Button);
+            jump.AddBinding("<Keyboard>/space");
+            jump.AddBinding("<Gamepad>/buttonSouth");
+
+            var sprint = map.AddAction("Sprint", InputActionType.Button);
+            sprint.AddBinding("<Keyboard>/leftShift");
+            sprint.AddBinding("<Gamepad>/leftStickPress");
+
+            var attack = map.AddAction("Attack", InputActionType.Button);
+            attack.AddBinding("<Mouse>/leftButton");
+            attack.AddBinding("<Gamepad>/rightTrigger");
+
+            var block = map.AddAction("Block", InputActionType.Button);
+            block.AddBinding("<Mouse>/rightButton");
+            block.AddBinding("<Gamepad>/leftTrigger");
+
+            var interact = map.AddAction("Interact", InputActionType.Button);
+            interact.AddBinding("<Keyboard>/e");
+            interact.AddBinding("<Gamepad>/buttonWest");
+
+            var dodge = map.AddAction("Dodge", InputActionType.Button);
+            dodge.AddBinding("<Keyboard>/q");
+            dodge.AddBinding("<Gamepad>/buttonEast");
+
+            asset.AddActionMap(map);
+
+            AssetDatabase.CreateAsset(asset, DefaultInputAssetPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            return AssetDatabase.LoadAssetAtPath<InputActionAsset>(DefaultInputAssetPath);
         }
 
         public static HeroSetupResult ConfigureHero(GameObject heroRoot, HeroAutoSetupOptions options)

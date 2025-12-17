@@ -41,6 +41,15 @@ A full walkthrough with install and usage instructions can be found here: https:
 - Stamina system: sprinting and jumping drain stamina; the HUD now shows a yellow stamina bar on HeroCombatHUD.
 - Dodge / Roll: add an Input System action named `Dodge` (or change `Input → Dodge Action`) and add an Animator trigger parameter named `Roll` (or change `Animation → Roll Trigger`). Create an Any State → Roll transition driven by that trigger, and exit back to locomotion after the clip.
 
+## Default Input Bindings (UPM)
+
+Unity packages can’t reliably modify a project’s Input Actions automatically on install. Instead, this package’s auto-wiring tool will create a project-local `InputActionAsset` at `Assets/HeroCharacter/HeroCombatInputActions.asset` if you don’t already have one.
+
+Defaults include:
+- `Dodge` bound to `Q`
+- `Interact` bound to `E`
+- WASD movement, mouse look, space jump, shift sprint, mouse buttons attack/block (plus basic gamepad bindings)
+
 ## Release Notes
 
 ### 1.2.0
