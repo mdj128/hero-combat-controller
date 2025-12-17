@@ -354,10 +354,6 @@ namespace HeroCharacter
             {
                 animationSettings.rollSpeedFloat = "RollSpeed";
             }
-            if (string.IsNullOrEmpty(animationSettings.locomotionStateName))
-            {
-                animationSettings.locomotionStateName = "Moving";
-            }
 
             stamina.maxStamina = Mathf.Max(1f, stamina.maxStamina);
             stamina.regenPerSecond = Mathf.Max(0f, stamina.regenPerSecond);
@@ -1310,11 +1306,6 @@ namespace HeroCharacter
                 return;
             }
 
-            if (!string.IsNullOrEmpty(animationSettings.rollSpeedFloat))
-            {
-                TrySetFloatImmediate(anim, animationSettings.rollSpeedFloat, 1f);
-            }
-
             // Fallback to common parameter names if left blank in the inspector.
             if (string.IsNullOrEmpty(animationSettings.forwardVelocityFloat))
             {
@@ -1404,24 +1395,13 @@ namespace HeroCharacter
                 return;
             }
 
-            bool ended = (dodgeRollSpeed >= 0f && state.normalizedTime >= 1f) || (dodgeRollSpeed < 0f && state.normalizedTime <= 0f);
-            if (!ended)
+            if (dodgeRollSpeed >= 0f && state.normalizedTime >= 1f)
             {
-                return;
+                dodgeActive = false;
             }
-
-            dodgeActive = false;
-
-            if (!string.IsNullOrEmpty(animationSettings.rollSpeedFloat))
+            else if (dodgeRollSpeed < 0f && state.normalizedTime <= 0f)
             {
-                TrySetFloatImmediate(animator, animationSettings.rollSpeedFloat, 1f);
-            }
-
-            if (!string.IsNullOrEmpty(animationSettings.locomotionStateName))
-            {
-                int locLayer = Mathf.Clamp(animationSettings.locomotionStateLayer, 0, animator.layerCount - 1);
-                float fade = Mathf.Max(0f, animationSettings.locomotionCrossfade);
-                animator.CrossFadeInFixedTime(animationSettings.locomotionStateName, fade, locLayer, 0f);
+                dodgeActive = false;
             }
         }
 
@@ -2022,11 +2002,6 @@ namespace HeroCharacter
             public float rollCrossfade = 0.05f;
             [Tooltip("Float parameter used to drive roll playback speed (set to -1 for reversed roll).")]
             public string rollSpeedFloat = "RollSpeed";
-            [Header("Locomotion Return")]
-            [Tooltip("State name to return to after the roll finishes. Example: 'Moving' or 'Base Layer.Moving'.")]
-            public string locomotionStateName = "Moving";
-            public int locomotionStateLayer = 0;
-            public float locomotionCrossfade = 0.1f;
             public string damageTrigger = "Damage";
             public string deathTrigger = "Death";
             public float dampTime = 0.1f;
