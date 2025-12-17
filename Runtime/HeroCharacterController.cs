@@ -681,6 +681,13 @@ namespace HeroCharacter
 
         void HandleCombatAttackStarted()
         {
+            if (staminaCurrent < stamina.attackCost)
+            {
+                attackRequested = false;
+                return;
+            }
+
+            ConsumeStamina(stamina.attackCost);
             attackAnimationRequested = true;
             events.InvokeAttackRequest();
         }
@@ -1699,6 +1706,7 @@ namespace HeroCharacter
             public float regenPerSecond = 20f;
             public float sprintDrainPerSecond = 25f;
             public float jumpCost = 20f;
+            public float attackCost = 15f;
             public float minSprintStamina = 5f;
         }
 
