@@ -18,17 +18,27 @@ namespace HeroCharacter
         [SerializeField] Animator damageFeedbackAnimator;
         [SerializeField] string damageTrigger = "Damage";
         [SerializeField] bool autoFindHero = true;
+        [Header("Stamina")]
+        [SerializeField] Slider staminaSlider;
+        [SerializeField] Image staminaFillImage;
+        [SerializeField] Text staminaLabel;
+        [SerializeField] Color staminaColor = new Color(1f, 0.88f, 0.2f, 1f);
 
         CharacterCombatAgent combatAgent;
         bool eventsHooked;
+        bool staminaHooked;
 
         static Sprite defaultFillSprite;
         static Texture2D defaultFillTexture;
+        static Sprite defaultStaminaSprite;
+        static Texture2D defaultStaminaTexture;
 
         void Awake()
         {
             EnsureFillSprite();
             EnsureSlider();
+            EnsureStaminaFillSprite();
+            EnsureStaminaSlider();
             ResolveHeroReference();
         }
 
@@ -59,6 +69,25 @@ namespace HeroCharacter
             if (healthLabel != null)
             {
                 healthLabel.text = $"{Mathf.CeilToInt(current)}/{Mathf.CeilToInt(max)}";
+            }
+        }
+
+        void HandleStaminaChanged(float current, float max)
+        {
+            float normalized = max > 0f ? current / max : 0f;
+            if (staminaSlider != null)
+            {
+                float value = Mathf.Lerp(staminaSlider.minValue, staminaSlider.maxValue, normalized);
+                staminaSlider.value = value;
+            }
+            if (staminaFillImage != null)
+            {
+                staminaFillImage.fillAmount = normalized;
+            }
+
+            if (staminaLabel != null)
+            {
+                staminaLabel.text = $"{Mathf.CeilToInt(current)}/{Mathf.CeilToInt(max)}";
             }
         }
 
@@ -119,6 +148,7 @@ namespace HeroCharacter
             Unregister();
             combatAgent = agent;
             RegisterAgentListeners();
+            RegisterStaminaListeners();
         }
 
 #if UNITY_6000_0_OR_NEWER
@@ -168,6 +198,12 @@ namespace HeroCharacter
 
             eventsHooked = false;
             combatAgent = null;
+
+            if (hero != null && staminaHooked)
+            {
+                hero.StaminaChanged -= OnHeroStaminaChanged;
+            }
+            staminaHooked = false;
         }
 
         void OnAgentHealthChanged(float current, float max)
@@ -198,6 +234,11 @@ namespace HeroCharacter
             }
 
             HandleRevive(combatAgent.CurrentHealth, combatAgent.MaxHealth);
+        }
+
+        void OnHeroStaminaChanged(float current, float max)
+        {
+            HandleStaminaChanged(current, max);
         }
 
         void EnsureFillSprite()
@@ -275,6 +316,87 @@ namespace HeroCharacter
             {
                 slider.targetGraphic = healthFillImage;
             }
+        }
+
+        void EnsureStaminaFillSprite()
+        {
+            if (staminaFillImage == null)
+            {
+                return;
+            }
+
+            if (defaultStaminaSprite == null)
+            {
+                defaultStaminaSprite = CreateSolidSprite(ref defaultStaminaTexture, "HeroHUD_StaminaFillSprite");
+            }
+
+            staminaFillImage.color = staminaColor;
+
+            if (staminaFillImage.sprite == null && defaultStaminaSprite != null)
+            {
+                staminaFillImage.sprite = defaultStaminaSprite;
+            }
+
+            if (staminaFillImage.type != Image.Type.Filled)
+            {
+                staminaFillImage.type = Image.Type.Filled;
+            }
+
+            staminaFillImage.fillMethod = Image.FillMethod.Horizontal;
+            staminaFillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+        }
+
+        void EnsureStaminaSlider()
+        {
+            if (staminaSlider == null && staminaFillImage != null)
+            {
+                RectTransform panel = staminaFillImage.rectTransform.parent as RectTransform;
+                if (panel == null)
+                {
+                    panel = staminaFillImage.rectTransform;
+                }
+
+                staminaSlider = panel.GetComponent<Slider>();
+                if (staminaSlider == null)
+                {
+                    staminaSlider = panel.gameObject.AddComponent<Slider>();
+                }
+            }
+
+            if (staminaSlider == null)
+            {
+                return;
+            }
+
+            staminaSlider.interactable = false;
+            staminaSlider.transition = Selectable.Transition.None;
+            staminaSlider.navigation = new Navigation { mode = Navigation.Mode.None };
+            staminaSlider.direction = Slider.Direction.LeftToRight;
+            staminaSlider.minValue = 0f;
+            staminaSlider.maxValue = 1f;
+            staminaSlider.wholeNumbers = false;
+
+            if (staminaSlider.fillRect == null && staminaFillImage != null)
+            {
+                staminaSlider.fillRect = staminaFillImage.rectTransform;
+            }
+
+            if (staminaSlider.targetGraphic == null && staminaFillImage != null)
+            {
+                staminaSlider.targetGraphic = staminaFillImage;
+            }
+        }
+
+        void RegisterStaminaListeners()
+        {
+            if (hero == null || staminaHooked)
+            {
+                return;
+            }
+
+            hero.StaminaChanged += OnHeroStaminaChanged;
+            staminaHooked = true;
+            HandleStaminaChanged(hero.CurrentStamina, hero.MaxStamina);
         }
 
         static Sprite CreateSolidSprite(ref Texture2D texture, string textureName)

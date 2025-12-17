@@ -29,6 +29,7 @@ namespace HeroCharacter
         [SerializeField] InputSettings input = new InputSettings();
         [SerializeField] RuntimeEvents events = new RuntimeEvents();
         [SerializeField] DebugSettings debug = new DebugSettings();
+        [SerializeField] StaminaSettings stamina = new StaminaSettings();
 
         [Header("Feedback")]
         [SerializeField] bool attachFloatingCombatText = true;
@@ -41,6 +42,7 @@ namespace HeroCharacter
         AudioSource footstepAudio;
         CharacterCombatAgent combatAgent;
         HeroCrosshair crosshairUI;
+        float staminaCurrent;
 
         Vector2 moveInput;
         Vector2 lookInput;
@@ -142,6 +144,12 @@ namespace HeroCharacter
             remove => events.DamageTaken -= value;
         }
 
+        public event Action<float, float> StaminaChanged
+        {
+            add => events.StaminaChanged += value;
+            remove => events.StaminaChanged -= value;
+        }
+
         public event Action Died
         {
             add => events.Died += value;
@@ -162,6 +170,9 @@ namespace HeroCharacter
 
         public bool IsAlive => combatAgent != null && combatAgent.IsAlive;
         public CharacterCombatAgent Combat => combatAgent;
+        public float CurrentStamina => staminaCurrent;
+        public float MaxStamina => stamina.maxStamina;
+        public float NormalizedStamina => stamina.maxStamina > 0f ? staminaCurrent / stamina.maxStamina : 0f;
 
         public UnityEvent OnJumpEvent => events.onJump;
         public GroundStateEvent OnGroundedEvent => events.onGrounded;
@@ -205,6 +216,8 @@ namespace HeroCharacter
             cameraDistance = cameraSettings.thirdPersonDistance;
             lookRampTimer = 0f;
             nextStepTime = footsteps.stepInterval;
+            staminaCurrent = Mathf.Max(0f, stamina.maxStamina);
+            events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
 
             CacheAudioSource();
             InitialiseCameraState();
@@ -314,6 +327,12 @@ namespace HeroCharacter
             {
                 animationSettings.strafeVelocityFloat = "MoveX";
             }
+
+            stamina.maxStamina = Mathf.Max(1f, stamina.maxStamina);
+            stamina.regenPerSecond = Mathf.Max(0f, stamina.regenPerSecond);
+            stamina.sprintDrainPerSecond = Mathf.Max(0f, stamina.sprintDrainPerSecond);
+            stamina.jumpCost = Mathf.Max(0f, stamina.jumpCost);
+            stamina.minSprintStamina = Mathf.Max(0f, stamina.minSprintStamina);
         }
 #endif
 
@@ -377,6 +396,7 @@ namespace HeroCharacter
             UpdateAnimator(Time.deltaTime);
             UpdateFootsteps(Time.deltaTime);
             HandleInteractions();
+            UpdateStamina(Time.deltaTime);
             ClearTransientInputs();
         }
 
@@ -650,6 +670,8 @@ namespace HeroCharacter
             suppressInputFrame = true;
             inputInitialized = false;
             lookRampTimer = 0f;
+            staminaCurrent = Mathf.Max(0f, stamina.maxStamina);
+            events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
             if (cameraSettings.lockCursor)
             {
                 Cursor.lockState = CursorLockMode.Locked;
@@ -818,7 +840,8 @@ namespace HeroCharacter
         void UpdateSprintState()
         {
             bool movePressed = moveInput.sqrMagnitude > 0.2f;
-            bool allowed = movement.canSprint && isGrounded;
+            bool hasStamina = staminaCurrent > stamina.minSprintStamina;
+            bool allowed = movement.canSprint && isGrounded && hasStamina;
             if (movement.toggleSprint)
             {
                 if (sprintHeld && !isSprinting && allowed && movePressed)
@@ -854,6 +877,11 @@ namespace HeroCharacter
 
         void PerformJump()
         {
+            if (staminaCurrent < stamina.jumpCost)
+            {
+                return;
+            }
+            ConsumeStamina(stamina.jumpCost);
             sprintJumpActive = isSprinting;
             Vector3 velocity = GetVelocity();
             velocity.y = 0f;
@@ -1022,6 +1050,55 @@ namespace HeroCharacter
             footstepAudio.pitch = UnityEngine.Random.Range(footsteps.pitchRange.x, footsteps.pitchRange.y);
             footstepAudio.volume = footsteps.volume;
             footstepAudio.PlayOneShot(clip);
+        }
+
+        void UpdateStamina(float deltaTime)
+        {
+            if (stamina.maxStamina <= 0f)
+            {
+                return;
+            }
+
+            float delta = 0f;
+            if (isSprinting)
+            {
+                delta -= stamina.sprintDrainPerSecond * deltaTime;
+            }
+            else
+            {
+                delta += stamina.regenPerSecond * deltaTime;
+            }
+
+            if (delta != 0f)
+            {
+                ApplyStaminaDelta(delta);
+            }
+        }
+
+        void ConsumeStamina(float amount)
+        {
+            if (amount <= 0f)
+            {
+                return;
+            }
+
+            ApplyStaminaDelta(-amount);
+        }
+
+        void ApplyStaminaDelta(float delta)
+        {
+            float prev = staminaCurrent;
+            staminaCurrent = Mathf.Clamp(staminaCurrent + delta, 0f, stamina.maxStamina);
+
+            if (!Mathf.Approximately(prev, staminaCurrent))
+            {
+                events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
+            }
+
+            if (staminaCurrent <= 0f)
+            {
+                isSprinting = false;
+            }
         }
 
         void CacheAudioSource()
@@ -1616,6 +1693,16 @@ namespace HeroCharacter
         }
 
         [Serializable]
+        class StaminaSettings
+        {
+            public float maxStamina = 100f;
+            public float regenPerSecond = 20f;
+            public float sprintDrainPerSecond = 25f;
+            public float jumpCost = 20f;
+            public float minSprintStamina = 5f;
+        }
+
+        [Serializable]
         class CrosshairSettings
         {
             public bool enableCrosshair = true;
@@ -1679,6 +1766,7 @@ namespace HeroCharacter
             public UnityEvent onAttackPerformed = new UnityEvent();
             public BoolUnityEvent onBlockActive = new BoolUnityEvent();
             public HealthChangedUnityEvent onHealthChanged = new HealthChangedUnityEvent();
+            public HealthChangedUnityEvent onStaminaChanged = new HealthChangedUnityEvent();
             public DamageInfoUnityEvent onDamageTaken = new DamageInfoUnityEvent();
             public UnityEvent onDied = new UnityEvent();
             public UnityEvent onRevived = new UnityEvent();
@@ -1691,6 +1779,7 @@ namespace HeroCharacter
             [NonSerialized] public Action AttackPerformed;
             [NonSerialized] public Action<bool> BlockActive;
             [NonSerialized] public Action<float, float> HealthChanged;
+            [NonSerialized] public Action<float, float> StaminaChanged;
             [NonSerialized] public Action<DamageInfo> DamageTaken;
             [NonSerialized] public Action Died;
             [NonSerialized] public Action Revived;
@@ -1746,6 +1835,12 @@ namespace HeroCharacter
             {
                 onHealthChanged.Invoke(current, max);
                 HealthChanged?.Invoke(current, max);
+            }
+
+            public void InvokeStaminaChanged(float current, float max)
+            {
+                onStaminaChanged.Invoke(current, max);
+                StaminaChanged?.Invoke(current, max);
             }
 
             public void InvokeDamageTaken(DamageInfo damage)

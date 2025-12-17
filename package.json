@@ -1,7 +1,7 @@
 {
   "name": "com.herocharacter.herocombat",
   "displayName": "Hero Combat Controller",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "unity": "6000.2",
   "description": "Hero combat controller, NPC brains, floating combat text, HUD prefab, and editor auto-wiring tools.",
   "keywords": ["hero", "combat", "controller", "npc", "hud"],

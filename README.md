@@ -38,8 +38,13 @@ A full walkthrough with install and usage instructions can be found here: https:
 - Add `HeroInteractableObject` to any GameObject to fire UnityEvents when the hero interacts, or implement `IHeroInteractable` for custom behaviour.
 - Movement now supports over‑the‑shoulder strafing/backpedal by default (`Movement → Face Camera Forward`). Disable that toggle if you prefer turn-in-place locomotion.
 - Animation controller: use `Runtime/Animation/HeroCombatAnimator2.controller` to get the 2D MoveX/MoveY blend trees for full directional walk/run (strafe/backpedal) support.
+- Stamina system: sprinting and jumping drain stamina; the HUD now shows a yellow stamina bar on HeroCombatHUD.
 
 ## Release Notes
+
+### 1.2.0
+- Added stamina system (drain on sprint/jump, regen when resting) with HUD bar.
+- HUD prefab updated; binder listens to new stamina events.
 
 ### 1.1.0
 - Added HeroCombatAnimator2.controller with 2D MoveX/MoveY locomotion blends.
