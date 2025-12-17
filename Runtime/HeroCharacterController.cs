@@ -86,6 +86,7 @@ namespace HeroCharacter
         bool dodgeEndsWithAnimation;
         string dodgeRollStateName;
         int dodgeRollStateLayer;
+        float dodgeRollSpeed;
         GroundState ground = new GroundState();
         Vector3 pendingRootMotion;
         Vector3 desiredPlanarVelocity;
@@ -345,6 +346,14 @@ namespace HeroCharacter
             {
                 animationSettings.strafeVelocityFloat = "MoveX";
             }
+            if (string.IsNullOrEmpty(animationSettings.rollStateName))
+            {
+                animationSettings.rollStateName = "Dodge";
+            }
+            if (string.IsNullOrEmpty(animationSettings.rollSpeedFloat))
+            {
+                animationSettings.rollSpeedFloat = "RollSpeed";
+            }
 
             stamina.maxStamina = Mathf.Max(1f, stamina.maxStamina);
             stamina.regenPerSecond = Mathf.Max(0f, stamina.regenPerSecond);
@@ -358,6 +367,8 @@ namespace HeroCharacter
             dodge.duration = Mathf.Max(0.05f, dodge.duration);
             dodge.dodgeSpeed = Mathf.Max(0f, dodge.dodgeSpeed);
             dodge.invulnerableDuration = Mathf.Max(0f, dodge.invulnerableDuration);
+            dodge.backwardsInputThreshold = Mathf.Max(0f, dodge.backwardsInputThreshold);
+            dodge.backwardsRollSpeedMultiplier = Mathf.Max(0.1f, dodge.backwardsRollSpeedMultiplier);
         }
 #endif
 
@@ -929,14 +940,18 @@ namespace HeroCharacter
                 return;
             }
 
-            Vector3 forward = cameraSettings.playerCamera != null
-                ? Vector3.ProjectOnPlane(cameraSettings.playerCamera.transform.forward, Vector3.up).normalized
-                : transform.forward;
+            // Dodge direction is relative to the character's facing.
+            // If you use "face camera forward" locomotion, this will match the camera heading anyway.
+            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < kSmallNumber)
             {
-                forward = transform.forward;
+                forward = Vector3.forward;
             }
-            Vector3 right = Vector3.Cross(Vector3.up, forward);
+            Vector3 right = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
+            if (right.sqrMagnitude < kSmallNumber)
+            {
+                right = Vector3.right;
+            }
 
             Vector3 dir = (forward * moveInput.y) + (right * moveInput.x);
             if (dir.sqrMagnitude < 0.05f)
@@ -959,27 +974,28 @@ namespace HeroCharacter
             dodgeInvulnEndTime = Time.time + Mathf.Max(0f, dodge.invulnerableDuration);
 
             var anim = animationSettings.GetAnimator();
-            if (anim != null && !string.IsNullOrEmpty(animationSettings.rollStateName))
+            if (anim == null)
             {
-                int layer = Mathf.Max(0, animationSettings.rollStateLayer);
-                // Play immediately (avoids exit-time delays from current state/transitions).
-                anim.Play(animationSettings.rollStateName, layer, 0f);
-                anim.Update(0f);
-                dodgeEndsWithAnimation = true;
-                dodgeRollStateName = animationSettings.rollStateName;
-                dodgeRollStateLayer = layer;
+                return;
             }
-            else
+
+            bool backwards = dodge.reverseRollForBackwards && moveInput.y <= -Mathf.Abs(dodge.backwardsInputThreshold);
+            float rollSpeed = backwards ? -Mathf.Max(0.1f, dodge.backwardsRollSpeedMultiplier) : 1f;
+            float startNormalizedTime = backwards ? 1f : 0f;
+
+            if (!string.IsNullOrEmpty(animationSettings.rollSpeedFloat))
             {
-                TrySetTrigger(anim, animationSettings.rollTrigger);
-                if (anim != null)
-                {
-                    anim.Update(0f);
-                }
-                dodgeEndsWithAnimation = false;
-                dodgeRollStateName = string.Empty;
-                dodgeRollStateLayer = 0;
+                TrySetFloatImmediate(anim, animationSettings.rollSpeedFloat, rollSpeed);
             }
+
+            int layer = Mathf.Max(0, animationSettings.rollStateLayer);
+            anim.Play(animationSettings.rollStateName, layer, startNormalizedTime);
+            anim.Update(0f);
+
+            dodgeEndsWithAnimation = true;
+            dodgeRollStateName = animationSettings.rollStateName;
+            dodgeRollStateLayer = layer;
+            dodgeRollSpeed = rollSpeed;
         }
 
         void UpdateSprintState()
@@ -1379,7 +1395,11 @@ namespace HeroCharacter
                 return;
             }
 
-            if (state.normalizedTime >= 1f)
+            if (dodgeRollSpeed >= 0f && state.normalizedTime >= 1f)
+            {
+                dodgeActive = false;
+            }
+            else if (dodgeRollSpeed < 0f && state.normalizedTime <= 0f)
             {
                 dodgeActive = false;
             }
@@ -1936,6 +1956,13 @@ namespace HeroCharacter
             public float dodgeSpeed = 6f;
             [Tooltip("If true, rotate the character to face the dodge direction at roll start.")]
             public bool rotateToDirectionOnStart = true;
+            [Header("Backwards Roll")]
+            [Tooltip("If true, holding backward will play the roll animation in reverse.")]
+            public bool reverseRollForBackwards = true;
+            [Tooltip("Input threshold (0-1). Roll is considered 'backwards' when MoveY <= -threshold.")]
+            [Range(0f, 1f)] public float backwardsInputThreshold = 0.2f;
+            [Tooltip("Playback speed multiplier when rolling backwards (negative speed is applied).")]
+            public float backwardsRollSpeedMultiplier = 1f;
             public bool invulnerableDuringDodge = true;
             public float invulnerableDuration = 0.25f;
         }
@@ -1968,11 +1995,13 @@ namespace HeroCharacter
             public string attackTrigger = "Attacking";
             public string rollTrigger = "Roll";
             [Tooltip("Optional: if set, force-plays this roll state immediately (bypassing transition exit time). Example: 'Roll' or 'Base Layer.Roll'.")]
-            public string rollStateName = "";
+            public string rollStateName = "Dodge";
             [Tooltip("Animator layer index used when forcing roll via Roll State Name.")]
             public int rollStateLayer = 0;
             [Tooltip("Crossfade duration when forcing roll via Roll State Name.")]
             public float rollCrossfade = 0.05f;
+            [Tooltip("Float parameter used to drive roll playback speed (set to -1 for reversed roll).")]
+            public string rollSpeedFloat = "RollSpeed";
             public string damageTrigger = "Damage";
             public string deathTrigger = "Death";
             public float dampTime = 0.1f;

@@ -39,7 +39,7 @@ A full walkthrough with install and usage instructions can be found here: https:
 - Movement now supports over‑the‑shoulder strafing/backpedal by default (`Movement → Face Camera Forward`). Disable that toggle if you prefer turn-in-place locomotion.
 - Animation controller: use `Runtime/Animation/HeroCombatAnimator2.controller` to get the 2D MoveX/MoveY blend trees for full directional walk/run (strafe/backpedal) support.
 - Stamina system: sprinting and jumping drain stamina; the HUD now shows a yellow stamina bar on HeroCombatHUD.
-- Dodge / Roll: add an Input System action named `Dodge` (or change `Input → Dodge Action`) and add an Animator trigger parameter named `Roll` (or change `Animation → Roll Trigger`). Create an Any State → Roll transition driven by that trigger, and exit back to locomotion after the clip. For instant response (no exit-time delays), set `Animation → Roll State Name` to your roll state (e.g. `Roll` or `Base Layer.Roll`) so the controller uses `Animator.Play(...)` immediately.
+- Dodge / Roll: add an Input System action named `Dodge` (or change `Input → Dodge Action`) and add an Animator trigger parameter named `Roll` (or change `Animation → Roll Trigger`). Create an Any State → Roll transition driven by that trigger, and exit back to locomotion after the clip. The package default uses `Animation → Roll State Name = Dodge` and `RollSpeed` (float) to support backwards roll playback.
 
 ## Default Input Bindings (UPM)
 
