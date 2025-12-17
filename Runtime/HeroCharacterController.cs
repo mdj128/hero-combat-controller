@@ -74,6 +74,8 @@ namespace HeroCharacter
         bool isSprinting;
         bool groundedSnap;
         bool sprintJumpActive;
+        bool jumpAnimOverrideActive;
+        float jumpAnimSpeed;
         GroundState ground = new GroundState();
         Vector3 pendingRootMotion;
         Vector3 desiredPlanarVelocity;
@@ -380,6 +382,12 @@ namespace HeroCharacter
             Cursor.visible = true;
             animatorParameterCache.Clear();
             loggedMissingParameters.Clear();
+
+            var anim = animationSettings != null ? animationSettings.GetAnimator() : null;
+            if (anim != null)
+            {
+                anim.speed = 1f;
+            }
         }
 
         void Update()
@@ -891,14 +899,19 @@ namespace HeroCharacter
             ConsumeStamina(stamina.jumpCost);
             sprintJumpActive = isSprinting;
             Vector3 velocity = GetVelocity();
-            velocity.y = 0f;
-            SetVelocity(velocity);
+            Vector3 planar = Vector3.ProjectOnPlane(velocity, Vector3.up);
+            float planarMultiplier = sprintJumpActive ? movement.sprintJumpHorizontalMultiplier : movement.walkJumpHorizontalMultiplier;
+            planar *= Mathf.Max(0f, planarMultiplier);
+            SetVelocity(planar);
             body.AddForce(Vector3.up * Mathf.Sqrt(2f * Physics.gravity.magnitude * movement.jumpHeight), ForceMode.VelocityChange);
             var anim = animationSettings.GetAnimator();
             if (TrySetTrigger(anim, animationSettings.jumpStartTrigger))
             {
                 // trigger set
             }
+
+            jumpAnimOverrideActive = true;
+            jumpAnimSpeed = sprintJumpActive ? movement.sprintJumpAnimSpeed : movement.walkJumpAnimSpeed;
             events.InvokeJump();
         }
 
@@ -1179,6 +1192,31 @@ namespace HeroCharacter
                 TrySetTrigger(anim, animationSettings.attackTrigger);
             }
             attackAnimationRequested = false;
+
+            UpdateJumpAnimationSpeed(anim, deltaTime);
+        }
+
+        void UpdateJumpAnimationSpeed(Animator animator, float deltaTime)
+        {
+            if (animator == null)
+            {
+                return;
+            }
+
+            if (isGrounded)
+            {
+                jumpAnimOverrideActive = false;
+            }
+
+            float targetSpeed = jumpAnimOverrideActive ? Mathf.Max(0.1f, jumpAnimSpeed) : 1f;
+            float smoothing = Mathf.Max(0f, movement.jumpAnimSpeedSmoothing);
+            if (smoothing <= kSmallNumber)
+            {
+                animator.speed = targetSpeed;
+                return;
+            }
+
+            animator.speed = Mathf.Lerp(animator.speed, targetSpeed, deltaTime * smoothing);
         }
 
         bool TrySetFloat(Animator animator, string parameter, float value, float deltaTime)
@@ -1651,6 +1689,17 @@ namespace HeroCharacter
             public float rotationSharpness = 12f;
             public float airControl = 0.4f;
             public float jumpHeight = 1.3f;
+            [Header("Jump Tuning")]
+            [Tooltip("Horizontal velocity multiplier applied at jump start while walking.")]
+            public float walkJumpHorizontalMultiplier = 1f;
+            [Tooltip("Horizontal velocity multiplier applied at jump start while sprinting.")]
+            public float sprintJumpHorizontalMultiplier = 1.15f;
+            [Tooltip("Animator speed while airborne after a walk jump.")]
+            public float walkJumpAnimSpeed = 1f;
+            [Tooltip("Animator speed while airborne after a sprint jump.")]
+            public float sprintJumpAnimSpeed = 1.1f;
+            [Tooltip("How quickly the animator speed blends to/from jump speed.")]
+            public float jumpAnimSpeedSmoothing = 10f;
             public float groundingProbeDepth = 0.2f;
             public float groundProbePadding = 0.02f;
             public LayerMask whatIsGround = Physics.DefaultRaycastLayers;
