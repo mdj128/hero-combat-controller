@@ -1306,7 +1306,16 @@ namespace HeroCharacter
             {
                 // Prevent locomotion parameters / speed overrides from fighting the roll clip.
                 anim.speed = 1f;
-                UpdateDodgeEndState(anim);
+                // Prefer a deterministic end based on the configured dodge duration.
+                // This avoids getting stuck if the Animator has no exit transitions.
+                if (Time.time >= dodgeEndTime)
+                {
+                    EndDodge(anim);
+                }
+                else
+                {
+                    UpdateDodgeEndState(anim);
+                }
                 return;
             }
 
@@ -1405,12 +1414,24 @@ namespace HeroCharacter
             }
 
             bool ended = (dodgeRollSpeed >= 0f && state.normalizedTime >= 1f) || (dodgeRollSpeed < 0f && state.normalizedTime <= 0f);
-            if (!ended)
+            if (ended)
+            {
+                EndDodge(animator);
+            }
+        }
+
+        void EndDodge(Animator animator)
+        {
+            dodgeActive = false;
+            dodgeEndsWithAnimation = false;
+            dodgeRollStateName = string.Empty;
+            dodgeRollStateLayer = 0;
+            dodgeRollSpeed = 1f;
+
+            if (animator == null)
             {
                 return;
             }
-
-            dodgeActive = false;
 
             if (!string.IsNullOrEmpty(animationSettings.rollSpeedFloat))
             {
@@ -1422,6 +1443,7 @@ namespace HeroCharacter
                 int locLayer = Mathf.Clamp(animationSettings.locomotionStateLayer, 0, animator.layerCount - 1);
                 float fade = Mathf.Max(0f, animationSettings.locomotionCrossfade);
                 animator.CrossFadeInFixedTime(animationSettings.locomotionStateName, fade, locLayer, 0f);
+                animator.Update(0f);
             }
         }
 
