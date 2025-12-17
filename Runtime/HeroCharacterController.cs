@@ -1644,8 +1644,8 @@ namespace HeroCharacter
             [Tooltip("If true, the character faces the camera-forward direction, enabling strafing/backpedal without turning around.")]
             public bool faceCameraForward = true;
             public float standingHeight = 1.8f;
-            public float walkingSpeed = 3.5f;
-            public float sprintingSpeed = 6f;
+            public float walkingSpeed = 2f;
+            public float sprintingSpeed = 4f;
             public float acceleration = 24f;
             public float deceleration = 18f;
             public float rotationSharpness = 12f;
@@ -1703,7 +1703,7 @@ namespace HeroCharacter
         class StaminaSettings
         {
             public float maxStamina = 100f;
-            public float regenPerSecond = 20f;
+            public float regenPerSecond = 5f;
             public float sprintDrainPerSecond = 25f;
             public float jumpCost = 20f;
             public float attackCost = 15f;
