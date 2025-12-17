@@ -476,8 +476,8 @@ namespace HeroCharacter.Editor
         public class AnimationBindingProfile
         {
             public string velocityFloat = "Vel";
-            public string forwardVelocityFloat = "";
-            public string strafeVelocityFloat = "";
+            public string forwardVelocityFloat = "MoveY";
+            public string strafeVelocityFloat = "MoveX";
             public string groundedBool = "Grounded";
             public string sprintBool = "Sprinting";
             public string idleBool = "Idle";

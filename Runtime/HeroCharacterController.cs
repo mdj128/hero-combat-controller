@@ -304,6 +304,15 @@ namespace HeroCharacter
                 ConfigureFloatingCombatTextSpawner();
                 EnsureCrosshair();
             }
+
+            if (string.IsNullOrEmpty(animationSettings.forwardVelocityFloat))
+            {
+                animationSettings.forwardVelocityFloat = "MoveY";
+            }
+            if (string.IsNullOrEmpty(animationSettings.strafeVelocityFloat))
+            {
+                animationSettings.strafeVelocityFloat = "MoveX";
+            }
         }
 #endif
 
@@ -746,11 +755,19 @@ namespace HeroCharacter
             Vector3 moveWorld = (forward * moveInput.y) + (right * moveInput.x);
             moveWorld = Vector3.ClampMagnitude(moveWorld, 1f);
 
-            if (moveWorld.sqrMagnitude > kSmallNumber)
+            Quaternion? desiredRotation = null;
+            if (movement.faceCameraForward && forward.sqrMagnitude > kSmallNumber)
             {
-                float targetYaw = Mathf.Atan2(moveWorld.x, moveWorld.z) * Mathf.Rad2Deg;
-                Quaternion targetRot = Quaternion.Euler(0f, targetYaw, 0f);
-                transform.rotation = Quaternion.Lerp(transform.rotation, targetRot, movement.rotationSharpness * deltaTime);
+                desiredRotation = Quaternion.LookRotation(forward, Vector3.up);
+            }
+            else if (moveWorld.sqrMagnitude > kSmallNumber)
+            {
+                desiredRotation = Quaternion.LookRotation(moveWorld, Vector3.up);
+            }
+
+            if (desiredRotation.HasValue)
+            {
+                transform.rotation = Quaternion.Lerp(transform.rotation, desiredRotation.Value, movement.rotationSharpness * deltaTime);
             }
 
             UpdateSprintState();
@@ -1032,6 +1049,16 @@ namespace HeroCharacter
                 return;
             }
 
+            // Fallback to common parameter names if left blank in the inspector.
+            if (string.IsNullOrEmpty(animationSettings.forwardVelocityFloat))
+            {
+                animationSettings.forwardVelocityFloat = "MoveY";
+            }
+            if (string.IsNullOrEmpty(animationSettings.strafeVelocityFloat))
+            {
+                animationSettings.strafeVelocityFloat = "MoveX";
+            }
+
             Vector3 planarVelocity = Vector3.ProjectOnPlane(GetVelocity(), Vector3.up);
             float velocity = planarVelocity.magnitude;
             if (velocity < animationSettings.velocityEpsilon)
@@ -1039,11 +1066,14 @@ namespace HeroCharacter
                 velocity = 0f;
             }
 
-            Vector3 localVelocity = transform.InverseTransformVector(planarVelocity);
+            Vector3 localPlanarVelocity = transform.InverseTransformVector(planarVelocity);
+            // Use local velocity so run/walk blend trees see real movement speed (covers sprint magnitudes).
+            float forwardParam = Mathf.Clamp(localPlanarVelocity.z, -10f, 10f);
+            float strafeParam = Mathf.Clamp(localPlanarVelocity.x, -10f, 10f);
 
             TrySetFloat(anim, animationSettings.velocityFloat, velocity, deltaTime);
-            TrySetFloat(anim, animationSettings.forwardVelocityFloat, localVelocity.z, deltaTime);
-            TrySetFloat(anim, animationSettings.strafeVelocityFloat, localVelocity.x, deltaTime);
+            TrySetFloatImmediate(anim, animationSettings.forwardVelocityFloat, forwardParam);
+            TrySetFloatImmediate(anim, animationSettings.strafeVelocityFloat, strafeParam);
             TrySetBool(anim, animationSettings.groundedBool, isGrounded);
             TrySetBool(anim, animationSettings.sprintBool, isSprinting);
             TrySetBool(anim, animationSettings.idleBool, velocity <= 0f);
@@ -1062,6 +1092,17 @@ namespace HeroCharacter
             }
 
             animator.SetFloat(parameter, value, animationSettings.dampTime, deltaTime);
+            return true;
+        }
+
+        bool TrySetFloatImmediate(Animator animator, string parameter, float value)
+        {
+            if (string.IsNullOrEmpty(parameter) || !AnimatorHasParameter(animator, parameter, AnimatorControllerParameterType.Float))
+            {
+                return false;
+            }
+
+            animator.SetFloat(parameter, value);
             return true;
         }
 
@@ -1503,6 +1544,8 @@ namespace HeroCharacter
             public bool canJump = true;
             public bool canSprint = true;
             public bool toggleSprint = false;
+            [Tooltip("If true, the character faces the camera-forward direction, enabling strafing/backpedal without turning around.")]
+            public bool faceCameraForward = true;
             public float standingHeight = 1.8f;
             public float walkingSpeed = 3.5f;
             public float sprintingSpeed = 6f;
@@ -1577,8 +1620,8 @@ namespace HeroCharacter
         {
             public Animator thirdPersonAnimator;
             public string velocityFloat = "Vel";
-            public string forwardVelocityFloat = "";
-            public string strafeVelocityFloat = "";
+            public string forwardVelocityFloat = "MoveY";
+            public string strafeVelocityFloat = "MoveX";
             public string groundedBool = "Grounded";
             public string sprintBool = "Sprinting";
             public string idleBool = "Idle";

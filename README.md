@@ -36,6 +36,7 @@ A full walkthrough with install and usage instructions can be found here: https:
 - A lightweight crosshair now auto-attaches to the hero camera when the controller is enabled. Tweak size/colour in the **Crosshair** foldout on `HeroCharacterController` or disable it entirely.
 - Press the **Interact** input (default action name `Interact`) while looking at an object on the interactable layer. The controller sphere-casts from the crosshair’s viewport anchor (default 0.55, 0.52) so it lines up with an over-the-shoulder reticle.
 - Add `HeroInteractableObject` to any GameObject to fire UnityEvents when the hero interacts, or implement `IHeroInteractable` for custom behaviour.
+- Movement now supports over‑the‑shoulder strafing/backpedal by default (`Movement → Face Camera Forward`). Disable that toggle if you prefer turn-in-place locomotion.
 
 ## Requirements
 
