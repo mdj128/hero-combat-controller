@@ -958,7 +958,17 @@ namespace HeroCharacter
             dodgeInvulnEndTime = Time.time + Mathf.Max(0f, dodge.invulnerableDuration);
 
             var anim = animationSettings.GetAnimator();
-            TrySetTrigger(anim, animationSettings.rollTrigger);
+            if (anim != null && !string.IsNullOrEmpty(animationSettings.rollStateName))
+            {
+                int layer = Mathf.Max(0, animationSettings.rollStateLayer);
+                float fade = Mathf.Max(0f, animationSettings.rollCrossfade);
+                anim.CrossFadeInFixedTime(animationSettings.rollStateName, fade, layer, 0f);
+                anim.Update(0f);
+            }
+            else
+            {
+                TrySetTrigger(anim, animationSettings.rollTrigger);
+            }
         }
 
         void UpdateSprintState()
@@ -1908,6 +1918,12 @@ namespace HeroCharacter
             public string jumpLandTrigger = "";
             public string attackTrigger = "Attacking";
             public string rollTrigger = "Roll";
+            [Tooltip("Optional: if set, force-plays this roll state immediately (bypassing transition exit time). Example: 'Roll' or 'Base Layer.Roll'.")]
+            public string rollStateName = "";
+            [Tooltip("Animator layer index used when forcing roll via Roll State Name.")]
+            public int rollStateLayer = 0;
+            [Tooltip("Crossfade duration when forcing roll via Roll State Name.")]
+            public float rollCrossfade = 0.05f;
             public string damageTrigger = "Damage";
             public string deathTrigger = "Death";
             public float dampTime = 0.1f;
