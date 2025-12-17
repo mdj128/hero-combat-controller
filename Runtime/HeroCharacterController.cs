@@ -12,7 +12,7 @@ using UnityEngine.InputSystem;
 namespace HeroCharacter
 {
     /// <summary>
-    /// Custom character controller that replaces SCC while remaining extensible for combat and stats systems.
+    /// Custom character controller for combat and stats systems.
     /// Handles third-person camera control, grounded locomotion, sprinting and footstep audio.
     /// </summary>
 [RequireComponent(typeof(Rigidbody))]
@@ -24,6 +24,7 @@ namespace HeroCharacter
         [SerializeField] MovementSettings movement = new MovementSettings();
         [SerializeField] FootstepSettings footsteps = new FootstepSettings();
         [SerializeField] InteractionSettings interaction = new InteractionSettings();
+        [SerializeField] CrosshairSettings crosshair = new CrosshairSettings();
         [SerializeField] AnimationSettings animationSettings = new AnimationSettings();
         [SerializeField] InputSettings input = new InputSettings();
         [SerializeField] RuntimeEvents events = new RuntimeEvents();
@@ -39,6 +40,7 @@ namespace HeroCharacter
         CapsuleCollider capsule;
         AudioSource footstepAudio;
         CharacterCombatAgent combatAgent;
+        HeroCrosshair crosshairUI;
 
         Vector2 moveInput;
         Vector2 lookInput;
@@ -60,6 +62,7 @@ namespace HeroCharacter
         float yaw;
         float pitch;
         float cameraDistance;
+        float lookRampTimer;
         float stepCycle;
         float nextStepTime;
 
@@ -192,12 +195,14 @@ namespace HeroCharacter
             capsule = GetComponent<CapsuleCollider>();
             combatAgent = GetComponent<CharacterCombatAgent>();
             EnsureFloatingCombatText();
+            EnsureCrosshair();
 
             body.useGravity = true;
             body.freezeRotation = true;
             body.interpolation = RigidbodyInterpolation.Interpolate;
 
             cameraDistance = cameraSettings.thirdPersonDistance;
+            lookRampTimer = 0f;
             nextStepTime = footsteps.stepInterval;
 
             CacheAudioSource();
@@ -283,6 +288,7 @@ namespace HeroCharacter
             EnableInputActions(true);
             suppressInputFrame = true;
             inputInitialized = false;
+            lookRampTimer = 0f;
             if (cameraSettings.lockCursor)
             {
                 Cursor.lockState = CursorLockMode.Locked;
@@ -296,6 +302,7 @@ namespace HeroCharacter
             if (!Application.isPlaying)
             {
                 ConfigureFloatingCombatTextSpawner();
+                EnsureCrosshair();
             }
         }
 #endif
@@ -311,6 +318,29 @@ namespace HeroCharacter
             floatingCombatText.Anchor = transform;
             floatingCombatText.SpawnOffset = floatingCombatTextOffset;
             floatingCombatText.DamageColor = floatingCombatTextColor;
+        }
+
+        void EnsureCrosshair()
+        {
+            if (cameraSettings.playerCamera == null)
+            {
+                return;
+            }
+
+            if (crosshairUI == null || crosshairUI.gameObject != cameraSettings.playerCamera.gameObject)
+            {
+                crosshairUI = cameraSettings.playerCamera.GetComponent<HeroCrosshair>();
+            }
+
+            if (crosshairUI == null && crosshair.enableCrosshair)
+            {
+                crosshairUI = cameraSettings.playerCamera.gameObject.AddComponent<HeroCrosshair>();
+            }
+
+            if (crosshairUI != null)
+            {
+            crosshairUI.ApplySettings(crosshair.enableCrosshair, crosshair.color, crosshair.interactableColor, crosshair.size, crosshair.thickness, crosshair.gap, crosshair.viewportAnchor);
+        }
         }
 
         void OnDisable()
@@ -330,6 +360,7 @@ namespace HeroCharacter
                 return;
             }
 
+            EnsureCrosshair();
             SampleInput();
             UpdateStateMachine();
             UpdateCamera(Time.deltaTime);
@@ -608,6 +639,7 @@ namespace HeroCharacter
             EnableInputActions(true);
             suppressInputFrame = true;
             inputInitialized = false;
+            lookRampTimer = 0f;
             if (cameraSettings.lockCursor)
             {
                 Cursor.lockState = CursorLockMode.Locked;
@@ -848,6 +880,8 @@ namespace HeroCharacter
             }
 
             float sensitivity = cameraSettings.sensitivity;
+            float ramp = GetLookRampMultiplier(deltaTime);
+            sensitivity *= ramp;
             Vector2 adjustedLook = lookInput;
 
             switch (cameraSettings.inversion)
@@ -877,6 +911,29 @@ namespace HeroCharacter
             ApplyThirdPersonCamera(deltaTime);
 
             zoomInput = 0f;
+        }
+
+        float GetLookRampMultiplier(float deltaTime)
+        {
+            if (!cameraSettings.easeInLook)
+            {
+                return 1f;
+            }
+
+            lookRampTimer += deltaTime;
+
+            if (lookRampTimer < cameraSettings.lookStartDelay)
+            {
+                return 0f;
+            }
+
+            if (cameraSettings.lookRampDuration <= kSmallNumber)
+            {
+                return 1f;
+            }
+
+            float t = Mathf.Clamp01((lookRampTimer - cameraSettings.lookStartDelay) / cameraSettings.lookRampDuration);
+            return Mathf.SmoothStep(0f, 1f, t);
         }
 
         void ApplyThirdPersonCamera(float deltaTime)
@@ -1113,13 +1170,16 @@ namespace HeroCharacter
 
         void HandleInteractions()
         {
+            bool hasTarget;
+            IHeroInteractable target = FindInteractable(out hasTarget);
+            UpdateCrosshairHover(hasTarget);
+
             if (!interactRequested || interaction.interactableLayer == 0)
             {
                 interactRequested = false;
                 return;
             }
 
-            IHeroInteractable target = FindInteractable();
             if (target != null)
             {
                 target.Interact(this);
@@ -1128,30 +1188,80 @@ namespace HeroCharacter
             interactRequested = false;
         }
 
-        IHeroInteractable FindInteractable()
+        void UpdateCrosshairHover(bool hasTarget)
         {
+            if (crosshairUI != null)
+            {
+                crosshairUI.SetInteractableHover(hasTarget);
+            }
+        }
+
+        IHeroInteractable FindInteractable(out bool hasTarget)
+        {
+            hasTarget = false;
             if (cameraSettings.playerCamera == null)
             {
                 return null;
             }
+
+            if (interaction.interactableLayer == 0)
+            {
+                return null;
+            }
+
+            Camera cam = cameraSettings.playerCamera;
+            Vector2 anchor = crosshair.viewportAnchor;
+            Ray ray = cam.ViewportPointToRay(new Vector3(anchor.x, anchor.y, 0f));
+
+            if (Physics.SphereCast(ray, interaction.sphereCastRadius, out var hit, interaction.interactRange, interaction.interactableLayer, QueryTriggerInteraction.Collide))
+            {
+                if (TryResolveInteractable(hit.collider, out var interactable))
+                {
+                    hasTarget = true;
+                    return interactable;
+                }
+            }
+
+            // Fallback: proximity search in front of the hero to keep legacy behaviour.
             Collider[] colliders = Physics.OverlapBox(transform.position + transform.forward * (interaction.interactRange * 0.5f),
                 Vector3.one * (interaction.interactRange * 0.5f), transform.rotation, interaction.interactableLayer, QueryTriggerInteraction.Ignore);
 
-            IHeroInteractable closest = null;
             float closestDistance = float.MaxValue;
+            IHeroInteractable closest = null;
             foreach (var collider in colliders)
             {
-                if (collider.TryGetComponent<IHeroInteractable>(out var interactable))
+                if (!TryResolveInteractable(collider, out var interactable))
                 {
-                    float d = Vector3.Distance(transform.position, collider.transform.position);
-                    if (d < closestDistance)
-                    {
-                        closestDistance = d;
-                        closest = interactable;
-                    }
+                    continue;
+                }
+
+                float distance = Vector3.Distance(transform.position, collider.transform.position);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closest = interactable;
                 }
             }
+
+            hasTarget = closest != null;
             return closest;
+        }
+
+        bool TryResolveInteractable(Collider collider, out IHeroInteractable interactable)
+        {
+            if (collider == null)
+            {
+                interactable = null;
+                return false;
+            }
+
+            if (collider.TryGetComponent<IHeroInteractable>(out interactable))
+            {
+                return true;
+            }
+
+            interactable = collider.GetComponentInParent<IHeroInteractable>();
+            return interactable != null;
         }
 
         #endregion
@@ -1359,6 +1469,12 @@ namespace HeroCharacter
             public float sensitivity = 50f;
             public float verticalRotationRange = 170f;
             public float bodyAlignmentSmoothing = 0f;
+            [Tooltip("If true, mouse look eases in on scene start/enable to avoid sudden jumps.")]
+            public bool easeInLook = true;
+            [Tooltip("Delay (seconds) after enable before look begins to ramp.")]
+            public float lookStartDelay = 0.15f;
+            [Tooltip("Time (seconds) the look sensitivity takes to reach full strength after the delay.")]
+            public float lookRampDuration = 0.35f;
 
             [Header("Third Person")]
             public float thirdPersonDistance = 3f;
@@ -1441,6 +1557,19 @@ namespace HeroCharacter
             public float interactRange = 3f;
             public float sphereCastRadius = 0.25f;
             public LayerMask interactableLayer = ~0;
+        }
+
+        [Serializable]
+        class CrosshairSettings
+        {
+            public bool enableCrosshair = true;
+            public Color color = new Color(1f, 1f, 1f, 0.7f);
+            public Color interactableColor = new Color(0.4f, 1f, 0.4f, 0.9f);
+            public float size = 14f;
+            public float thickness = 2f;
+            public float gap = 6f;
+            [Tooltip("Viewport anchor for the crosshair (0-1). Slight offsets push the reticle off center for over-the-shoulder cameras.")]
+            public Vector2 viewportAnchor = new Vector2(0.55f, 0.52f);
         }
 
         [Serializable]

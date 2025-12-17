@@ -10,6 +10,7 @@ namespace HeroCharacter.Editor
         SerializedProperty movementProp;
         SerializedProperty footstepsProp;
         SerializedProperty interactionProp;
+        SerializedProperty crosshairProp;
         SerializedProperty animationProp;
         SerializedProperty inputProp;
         SerializedProperty eventsProp;
@@ -19,6 +20,7 @@ namespace HeroCharacter.Editor
         bool showMovement = true;
         bool showFootsteps = false;
         bool showInteraction = false;
+        bool showCrosshair = true;
         bool showAnimation = true;
         bool showInput = true;
         bool showEvents = false;
@@ -45,6 +47,7 @@ namespace HeroCharacter.Editor
             DrawSection(ref showMovement, "Movement", movementProp);
             DrawSection(ref showFootsteps, "Footsteps", footstepsProp);
             DrawSection(ref showInteraction, "Interaction", interactionProp);
+            DrawSection(ref showCrosshair, "Crosshair", crosshairProp);
             DrawSection(ref showAnimation, "Animation", animationProp);
             DrawSection(ref showInput, "Input", inputProp);
             DrawSection(ref showEvents, "Events", eventsProp);
@@ -56,7 +59,6 @@ namespace HeroCharacter.Editor
         new void DrawHeader()
         {
             EditorGUILayout.LabelField("Hero Character Controller", Styles.Header);
-            EditorGUILayout.LabelField("Extensible runtime replacement for SCC.", Styles.Subheader);
 
             var controller = (HeroCharacterController)target;
             if (controller != null && controller.enabled && controller.gameObject.activeInHierarchy)
@@ -118,6 +120,7 @@ namespace HeroCharacter.Editor
             movementProp = serializedObject.FindProperty("movement");
             footstepsProp = serializedObject.FindProperty("footsteps");
             interactionProp = serializedObject.FindProperty("interaction");
+            crosshairProp = serializedObject.FindProperty("crosshair");
             animationProp = serializedObject.FindProperty("animationSettings");
             inputProp = serializedObject.FindProperty("input");
             eventsProp = serializedObject.FindProperty("events");

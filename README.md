@@ -31,6 +31,12 @@ A full walkthrough with install and usage instructions can be found here: https:
 4. Select an enemy prefab and click **Configure NPC** – this wires NPC combat, animator driver, melee weapon (auto-finding the right-hand bone by default), floating text, and a world-space health bar.
 5. Enter Play Mode and use your existing animations/rigs with the provided controller + HUD.
 
+## Crosshair & Interactables
+
+- A lightweight crosshair now auto-attaches to the hero camera when the controller is enabled. Tweak size/colour in the **Crosshair** foldout on `HeroCharacterController` or disable it entirely.
+- Press the **Interact** input (default action name `Interact`) while looking at an object on the interactable layer. The controller sphere-casts from the crosshair’s viewport anchor (default 0.55, 0.52) so it lines up with an over-the-shoulder reticle.
+- Add `HeroInteractableObject` to any GameObject to fire UnityEvents when the hero interacts, or implement `IHeroInteractable` for custom behaviour.
+
 ## Requirements
 
 - Unity **6000.2 LTS** or newer
