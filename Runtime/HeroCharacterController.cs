@@ -30,6 +30,7 @@ namespace HeroCharacter
         [SerializeField] RuntimeEvents events = new RuntimeEvents();
         [SerializeField] DebugSettings debug = new DebugSettings();
         [SerializeField] StaminaSettings stamina = new StaminaSettings();
+        [SerializeField] DodgeSettings dodge = new DodgeSettings();
 
         [Header("Feedback")]
         [SerializeField] bool attachFloatingCombatText = true;
@@ -53,6 +54,7 @@ namespace HeroCharacter
         bool attackRequested;
         bool attackAnimationRequested;
         bool interactRequested;
+        bool dodgeRequested;
         bool suppressInputFrame;
         bool inputInitialized;
         bool lastBlockState;
@@ -76,6 +78,11 @@ namespace HeroCharacter
         bool sprintJumpActive;
         bool jumpAnimOverrideActive;
         float jumpAnimSpeed;
+        bool dodgeActive;
+        float dodgeEndTime;
+        float nextDodgeTime;
+        float dodgeInvulnEndTime;
+        Vector3 dodgeDirection;
         GroundState ground = new GroundState();
         Vector3 pendingRootMotion;
         Vector3 desiredPlanarVelocity;
@@ -91,6 +98,7 @@ namespace HeroCharacter
         InputAction attackAction;
         InputAction blockAction;
         InputAction interactAction;
+        InputAction dodgeAction;
 #endif
 
         readonly Dictionary<Animator, Dictionary<string, AnimatorControllerParameterType>> animatorParameterCache = new Dictionary<Animator, Dictionary<string, AnimatorControllerParameterType>>();
@@ -190,6 +198,11 @@ namespace HeroCharacter
 
         public void ApplyDamage(DamageInfo damage)
         {
+            if (dodge.enableDodge && dodge.invulnerableDuringDodge && dodgeActive && Time.time < dodgeInvulnEndTime && !damage.unblockable)
+            {
+                return;
+            }
+
             combatAgent?.ApplyDamage(damage);
         }
 
@@ -334,7 +347,14 @@ namespace HeroCharacter
             stamina.regenPerSecond = Mathf.Max(0f, stamina.regenPerSecond);
             stamina.sprintDrainPerSecond = Mathf.Max(0f, stamina.sprintDrainPerSecond);
             stamina.jumpCost = Mathf.Max(0f, stamina.jumpCost);
+            stamina.attackCost = Mathf.Max(0f, stamina.attackCost);
             stamina.minSprintStamina = Mathf.Max(0f, stamina.minSprintStamina);
+
+            dodge.staminaCost = Mathf.Max(0f, dodge.staminaCost);
+            dodge.cooldown = Mathf.Max(0f, dodge.cooldown);
+            dodge.duration = Mathf.Max(0.05f, dodge.duration);
+            dodge.dodgeSpeed = Mathf.Max(0f, dodge.dodgeSpeed);
+            dodge.invulnerableDuration = Mathf.Max(0f, dodge.invulnerableDuration);
         }
 #endif
 
@@ -416,7 +436,15 @@ namespace HeroCharacter
             }
 
             UpdateGrounding();
-            ResolveLocomotion(Time.fixedDeltaTime);
+            if (dodgeActive && Time.time < dodgeEndTime)
+            {
+                ResolveDodgeMovement(Time.fixedDeltaTime);
+            }
+            else
+            {
+                dodgeActive = false;
+                ResolveLocomotion(Time.fixedDeltaTime);
+            }
             ApplyRootMotion();
         }
 
@@ -464,11 +492,13 @@ namespace HeroCharacter
             bool attackPressedThisFrame = attackAction != null && attackAction.WasPressedThisFrame();
             blockHeld = blockAction != null && blockAction.IsPressed();
             bool interactPressedThisFrame = interactAction != null && interactAction.WasPressedThisFrame();
+            bool dodgePressedThisFrame = dodgeAction != null && dodgeAction.WasPressedThisFrame();
             float zoomValue = ReadZoomValue();
 
             jumpRequested |= jumpPressedThisFrame;
             attackRequested |= attackPressedThisFrame;
             interactRequested |= interactPressedThisFrame;
+            dodgeRequested |= dodgePressedThisFrame;
             zoomInput = zoomValue;
 
             moveInput = Vector2.ClampMagnitude(moveInput, 1f);
@@ -482,6 +512,7 @@ namespace HeroCharacter
                 attackRequested = false;
                 attackAnimationRequested = false;
                 interactRequested = false;
+                dodgeRequested = false;
                 suppressInputFrame = false;
             }
 
@@ -493,6 +524,7 @@ namespace HeroCharacter
             attackRequested = false;
             attackAnimationRequested = false;
             interactRequested = false;
+            dodgeRequested = false;
             zoomInput = 0f;
         }
 
@@ -540,6 +572,7 @@ namespace HeroCharacter
             attackAction = FindAction(actionAsset, input.attackAction);
             blockAction = FindAction(actionAsset, input.blockAction);
             interactAction = FindAction(actionAsset, input.interactAction);
+            dodgeAction = FindAction(actionAsset, input.dodgeAction);
 
             inputBindingsValid = moveAction != null && lookAction != null;
 
@@ -612,6 +645,7 @@ namespace HeroCharacter
                 attackAction?.Enable();
                 blockAction?.Enable();
                 interactAction?.Enable();
+                dodgeAction?.Enable();
             }
             else
             {
@@ -623,6 +657,7 @@ namespace HeroCharacter
                 attackAction?.Disable();
                 blockAction?.Disable();
                 interactAction?.Disable();
+                dodgeAction?.Disable();
             }
         }
 
@@ -636,6 +671,7 @@ namespace HeroCharacter
             attackAction = null;
             blockAction = null;
             interactAction = null;
+            dodgeAction = null;
         }
 
 #endif
@@ -661,6 +697,7 @@ namespace HeroCharacter
             EnableInputActions(false);
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            dodgeActive = false;
             var animator = animationSettings.GetAnimator();
             TrySetTrigger(animator, animationSettings.deathTrigger);
             events.InvokeDeath();
@@ -678,6 +715,7 @@ namespace HeroCharacter
             suppressInputFrame = true;
             inputInitialized = false;
             lookRampTimer = 0f;
+            dodgeActive = false;
             staminaCurrent = Mathf.Max(0f, stamina.maxStamina);
             events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
             if (cameraSettings.lockCursor)
@@ -722,6 +760,12 @@ namespace HeroCharacter
             {
                 combatAgent?.TryStartAttack();
                 attackRequested = false;
+            }
+
+            if (dodgeRequested)
+            {
+                TryStartDodge();
+                dodgeRequested = false;
             }
 
             if (blockHeld != lastBlockState)
@@ -850,6 +894,71 @@ namespace HeroCharacter
                 }
                 jumpRequested = false;
             }
+        }
+
+        void ResolveDodgeMovement(float deltaTime)
+        {
+            Vector3 velocity = GetVelocity();
+            Vector3 planar = dodgeDirection * Mathf.Max(0f, dodge.dodgeSpeed);
+            velocity = planar + Vector3.up * velocity.y;
+            SetVelocity(velocity);
+
+            if (planar.sqrMagnitude > kSmallNumber)
+            {
+                Quaternion target = Quaternion.LookRotation(planar.normalized, Vector3.up);
+                transform.rotation = Quaternion.Lerp(transform.rotation, target, movement.rotationSharpness * deltaTime);
+            }
+        }
+
+        void TryStartDodge()
+        {
+            if (!dodge.enableDodge || combatAgent == null || !combatAgent.IsAlive)
+            {
+                return;
+            }
+
+            if (Time.time < nextDodgeTime)
+            {
+                return;
+            }
+
+            if (!dodge.allowAirDodge && !isGrounded)
+            {
+                return;
+            }
+
+            if (staminaCurrent < dodge.staminaCost)
+            {
+                return;
+            }
+
+            Vector3 forward = cameraSettings.playerCamera != null
+                ? Vector3.ProjectOnPlane(cameraSettings.playerCamera.transform.forward, Vector3.up).normalized
+                : transform.forward;
+            if (forward.sqrMagnitude < kSmallNumber)
+            {
+                forward = transform.forward;
+            }
+            Vector3 right = Vector3.Cross(Vector3.up, forward);
+
+            Vector3 dir = (forward * moveInput.y) + (right * moveInput.x);
+            if (dir.sqrMagnitude < 0.05f)
+            {
+                dir = forward;
+            }
+            dodgeDirection = dir.normalized;
+
+            ConsumeStamina(dodge.staminaCost);
+            isSprinting = false;
+            sprintJumpActive = false;
+
+            dodgeActive = true;
+            dodgeEndTime = Time.time + Mathf.Max(0.05f, dodge.duration);
+            nextDodgeTime = Time.time + Mathf.Max(0f, dodge.cooldown);
+            dodgeInvulnEndTime = Time.time + Mathf.Max(0f, dodge.invulnerableDuration);
+
+            var anim = animationSettings.GetAnimator();
+            TrySetTrigger(anim, animationSettings.rollTrigger);
         }
 
         void UpdateSprintState()
@@ -1760,6 +1869,19 @@ namespace HeroCharacter
         }
 
         [Serializable]
+        class DodgeSettings
+        {
+            public bool enableDodge = true;
+            public bool allowAirDodge = false;
+            public float staminaCost = 20f;
+            public float cooldown = 0.6f;
+            public float duration = 0.45f;
+            public float dodgeSpeed = 6f;
+            public bool invulnerableDuringDodge = true;
+            public float invulnerableDuration = 0.25f;
+        }
+
+        [Serializable]
         class CrosshairSettings
         {
             public bool enableCrosshair = true;
@@ -1785,6 +1907,7 @@ namespace HeroCharacter
             [FormerlySerializedAs("jumpTrigger")] public string jumpStartTrigger = "Jump";
             public string jumpLandTrigger = "";
             public string attackTrigger = "Attacking";
+            public string rollTrigger = "Roll";
             public string damageTrigger = "Damage";
             public string deathTrigger = "Death";
             public float dampTime = 0.1f;
@@ -1810,6 +1933,7 @@ namespace HeroCharacter
             public string attackAction = "Attack";
             public string blockAction = "Block";
             public string interactAction = "Interact";
+            public string dodgeAction = "Dodge";
         }
 
         [Serializable]

@@ -16,6 +16,7 @@ namespace HeroCharacter.Editor
         SerializedProperty eventsProp;
         SerializedProperty debugProp;
         SerializedProperty staminaProp;
+        SerializedProperty dodgeProp;
 
         bool showCamera = true;
         bool showMovement = true;
@@ -23,6 +24,7 @@ namespace HeroCharacter.Editor
         bool showInteraction = false;
         bool showCrosshair = true;
         bool showStamina = true;
+        bool showDodge = true;
         bool showAnimation = true;
         bool showInput = true;
         bool showEvents = false;
@@ -51,6 +53,7 @@ namespace HeroCharacter.Editor
             DrawSection(ref showInteraction, "Interaction", interactionProp);
             DrawSection(ref showCrosshair, "Crosshair", crosshairProp);
             DrawSection(ref showStamina, "Stamina", staminaProp);
+            DrawSection(ref showDodge, "Dodge", dodgeProp);
             DrawSection(ref showAnimation, "Animation", animationProp);
             DrawSection(ref showInput, "Input", inputProp);
             DrawSection(ref showEvents, "Events", eventsProp);
@@ -125,6 +128,7 @@ namespace HeroCharacter.Editor
             interactionProp = serializedObject.FindProperty("interaction");
             crosshairProp = serializedObject.FindProperty("crosshair");
             staminaProp = serializedObject.FindProperty("stamina");
+            dodgeProp = serializedObject.FindProperty("dodge");
             animationProp = serializedObject.FindProperty("animationSettings");
             inputProp = serializedObject.FindProperty("input");
             eventsProp = serializedObject.FindProperty("events");
