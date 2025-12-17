@@ -30,6 +30,14 @@ namespace HeroCharacter
         [SerializeField] float damageScale = 1f;
         [SerializeField] float attackDelay = 1f;
 
+        [Header("Attack Motion")]
+        [SerializeField] bool enableAttackMotion = true;
+        [SerializeField, Min(0f)] float lungeDistance = 0.6f;
+        [SerializeField, Min(0.01f)] float lungeSpeed = 4f;
+        [SerializeField, Min(0f)] float retreatDistance = 0.4f;
+        [SerializeField, Min(0.01f)] float retreatSpeed = 3f;
+        [SerializeField, Min(0f)] float retreatDelay = 0.05f;
+
         [Header("UI")]
         [SerializeField] bool attachHealthBar = true;
         [SerializeField] Vector3 healthBarOffset = new Vector3(0f, 1.6f, 0f);
@@ -67,6 +75,12 @@ namespace HeroCharacter
         Rigidbody body;
         Collider[] cachedColliders;
         bool collidersDisabled;
+        bool attackLungeActive;
+        bool attackRetreatActive;
+        float lungeRemaining;
+        float retreatRemaining;
+        float retreatStartTime;
+        Vector3 retreatDirection;
 
         void Awake()
         {
@@ -147,7 +161,11 @@ namespace HeroCharacter
                 RotateNpc(Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * turnSpeed));
             }
 
-            if (enableMovement && sqrDistance > Mathf.Epsilon)
+            if (enableAttackMotion && (attackLungeActive || attackRetreatActive))
+            {
+                UpdateAttackMotion(flatDirection);
+            }
+            else if (enableMovement && sqrDistance > Mathf.Epsilon)
             {
                 float distance = Mathf.Sqrt(sqrDistance);
                 float selfRadius = 0.35f;
@@ -213,6 +231,7 @@ namespace HeroCharacter
                     if (combatAgent.TryStartAttack())
                     {
                         lastAttackTime = Time.time;
+                        BeginAttackMotion(flatDirection);
                     }
                 }
             }
@@ -250,6 +269,84 @@ namespace HeroCharacter
             }
 
             combatAgent.ResolveAttackHit(currentTarget, hitPoint, hitNormal, damageScale);
+        }
+
+        void BeginAttackMotion(Vector3 flatDirection)
+        {
+            if (!enableAttackMotion)
+            {
+                return;
+            }
+
+            if (flatDirection.sqrMagnitude < Mathf.Epsilon)
+            {
+                return;
+            }
+
+            attackLungeActive = lungeDistance > 0f;
+            lungeRemaining = lungeDistance;
+
+            // cancel any existing retreat and re-prime it for after the strike.
+            attackRetreatActive = false;
+            retreatRemaining = retreatDistance;
+            retreatStartTime = 0f;
+            retreatDirection = Vector3.zero;
+        }
+
+        void UpdateAttackMotion(Vector3 flatDirection)
+        {
+            if (combatAgent == null || !combatAgent.IsAlive || targetTransform == null)
+            {
+                attackLungeActive = false;
+                attackRetreatActive = false;
+                return;
+            }
+
+            float dt = Time.deltaTime;
+            if (dt <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            if (attackLungeActive)
+            {
+                if (flatDirection.sqrMagnitude < Mathf.Epsilon)
+                {
+                    attackLungeActive = false;
+                    return;
+                }
+
+                Vector3 dir = flatDirection.normalized;
+                float step = lungeSpeed * dt;
+                step = Mathf.Min(step, lungeRemaining);
+                lungeRemaining -= step;
+                MoveNpc(transform.position + dir * step);
+                return;
+            }
+
+            if (attackRetreatActive)
+            {
+                if (Time.time < retreatStartTime)
+                {
+                    return;
+                }
+
+                if (retreatDirection.sqrMagnitude < Mathf.Epsilon)
+                {
+                    retreatDirection = -transform.forward;
+                    retreatDirection.y = 0f;
+                }
+
+                Vector3 dir = retreatDirection.sqrMagnitude > Mathf.Epsilon ? retreatDirection.normalized : Vector3.back;
+                float step = retreatSpeed * dt;
+                step = Mathf.Min(step, retreatRemaining);
+                retreatRemaining -= step;
+                MoveNpc(transform.position + dir * step);
+                if (retreatRemaining <= 0f)
+                {
+                    attackRetreatActive = false;
+                }
+            }
         }
 
         bool EnsureTarget()
@@ -389,6 +486,7 @@ namespace HeroCharacter
 
             combatAgent.Died += HandleAgentDied;
             combatAgent.Revived += HandleAgentRevived;
+            combatAgent.AttackPerformed += HandleAgentAttackPerformed;
         }
 
         void UnsubscribeCombat()
@@ -400,6 +498,7 @@ namespace HeroCharacter
 
             combatAgent.Died -= HandleAgentDied;
             combatAgent.Revived -= HandleAgentRevived;
+            combatAgent.AttackPerformed -= HandleAgentAttackPerformed;
         }
 
         void HandleAgentDied()
@@ -410,6 +509,38 @@ namespace HeroCharacter
         void HandleAgentRevived()
         {
             EnableColliders();
+        }
+
+        void HandleAgentAttackPerformed()
+        {
+            if (!enableAttackMotion)
+            {
+                return;
+            }
+
+            // End lunge and retreat away from the hero after the strike window.
+            attackLungeActive = false;
+            if (retreatDistance <= 0f)
+            {
+                attackRetreatActive = false;
+                return;
+            }
+
+            Vector3 away = -transform.forward;
+            if (targetTransform != null)
+            {
+                Vector3 toTarget = targetTransform.position - transform.position;
+                toTarget.y = 0f;
+                if (toTarget.sqrMagnitude > Mathf.Epsilon)
+                {
+                    away = -toTarget.normalized;
+                }
+            }
+            away.y = 0f;
+            retreatDirection = away.sqrMagnitude > Mathf.Epsilon ? away : Vector3.back;
+            retreatRemaining = retreatDistance;
+            retreatStartTime = Time.time + retreatDelay;
+            attackRetreatActive = true;
         }
 
         void CacheColliders()
