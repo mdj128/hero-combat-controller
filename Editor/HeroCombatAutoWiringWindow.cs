@@ -718,7 +718,8 @@ namespace HeroCharacter.Editor
 
             var map = new InputActionMap("Player");
 
-            var move = map.AddAction("Move", InputActionType.Value, expectedControlType: "Vector2");
+            var move = map.AddAction("Move", InputActionType.Value);
+            move.expectedControlType = "Vector2";
             move.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")
@@ -726,11 +727,13 @@ namespace HeroCharacter.Editor
                 .With("Right", "<Keyboard>/d");
             move.AddBinding("<Gamepad>/leftStick");
 
-            var look = map.AddAction("Look", InputActionType.Value, expectedControlType: "Vector2");
+            var look = map.AddAction("Look", InputActionType.Value);
+            look.expectedControlType = "Vector2";
             look.AddBinding("<Mouse>/delta");
             look.AddBinding("<Gamepad>/rightStick");
 
-            var zoom = map.AddAction("Zoom", InputActionType.Value, expectedControlType: "Axis");
+            var zoom = map.AddAction("Zoom", InputActionType.Value);
+            zoom.expectedControlType = "Axis";
             zoom.AddBinding("<Mouse>/scroll/y");
 
             var jump = map.AddAction("Jump", InputActionType.Button);
