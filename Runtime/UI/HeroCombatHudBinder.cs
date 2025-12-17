@@ -65,11 +65,6 @@ namespace HeroCharacter
             {
                 healthFillImage.fillAmount = normalized;
             }
-
-            if (healthLabel != null)
-            {
-                healthLabel.text = $"{Mathf.CeilToInt(current)}/{Mathf.CeilToInt(max)}";
-            }
         }
 
         void HandleStaminaChanged(float current, float max)
@@ -83,11 +78,6 @@ namespace HeroCharacter
             if (staminaFillImage != null)
             {
                 staminaFillImage.fillAmount = normalized;
-            }
-
-            if (staminaLabel != null)
-            {
-                staminaLabel.text = $"{Mathf.CeilToInt(current)}/{Mathf.CeilToInt(max)}";
             }
         }
 
