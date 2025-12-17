@@ -65,6 +65,8 @@ namespace HeroCharacter
         FloatingCombatTextSpawner floatingText;
         Vector3 lastTargetPosition;
         Rigidbody body;
+        Collider[] cachedColliders;
+        bool collidersDisabled;
 
         void Awake()
         {
@@ -79,6 +81,7 @@ namespace HeroCharacter
             spawnPosition = transform.position;
             EnsureHealthBar();
             EnsureFloatingText();
+            CacheColliders();
         }
 
         void OnEnable()
@@ -87,6 +90,12 @@ namespace HeroCharacter
             AcquireTargetIfNeeded();
             EnsureHealthBar();
             EnsureFloatingText();
+            SubscribeCombat();
+        }
+
+        void OnDisable()
+        {
+            UnsubscribeCombat();
         }
 
         void OnValidate()
@@ -369,6 +378,84 @@ namespace HeroCharacter
             {
                 transform.rotation = rotation;
             }
+        }
+
+        void SubscribeCombat()
+        {
+            if (combatAgent == null)
+            {
+                return;
+            }
+
+            combatAgent.Died += HandleAgentDied;
+            combatAgent.Revived += HandleAgentRevived;
+        }
+
+        void UnsubscribeCombat()
+        {
+            if (combatAgent == null)
+            {
+                return;
+            }
+
+            combatAgent.Died -= HandleAgentDied;
+            combatAgent.Revived -= HandleAgentRevived;
+        }
+
+        void HandleAgentDied()
+        {
+            DisableColliders();
+        }
+
+        void HandleAgentRevived()
+        {
+            EnableColliders();
+        }
+
+        void CacheColliders()
+        {
+            cachedColliders = GetComponentsInChildren<Collider>(true);
+        }
+
+        void DisableColliders()
+        {
+            if (cachedColliders == null || cachedColliders.Length == 0)
+            {
+                CacheColliders();
+            }
+
+            foreach (var col in cachedColliders)
+            {
+                if (col != null)
+                {
+                    col.enabled = false;
+                }
+            }
+
+            collidersDisabled = true;
+        }
+
+        void EnableColliders()
+        {
+            if (!collidersDisabled)
+            {
+                return;
+            }
+
+            if (cachedColliders == null || cachedColliders.Length == 0)
+            {
+                CacheColliders();
+            }
+
+            foreach (var col in cachedColliders)
+            {
+                if (col != null)
+                {
+                    col.enabled = true;
+                }
+            }
+
+            collidersDisabled = false;
         }
 
         void EnsureHealthBar()
