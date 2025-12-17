@@ -83,6 +83,9 @@ namespace HeroCharacter
         float nextDodgeTime;
         float dodgeInvulnEndTime;
         Vector3 dodgeDirection;
+        bool dodgeEndsWithAnimation;
+        string dodgeRollStateName;
+        int dodgeRollStateLayer;
         GroundState ground = new GroundState();
         Vector3 pendingRootMotion;
         Vector3 desiredPlanarVelocity;
@@ -902,12 +905,6 @@ namespace HeroCharacter
             Vector3 planar = dodgeDirection * Mathf.Max(0f, dodge.dodgeSpeed);
             velocity = planar + Vector3.up * velocity.y;
             SetVelocity(velocity);
-
-            if (planar.sqrMagnitude > kSmallNumber)
-            {
-                Quaternion target = Quaternion.LookRotation(planar.normalized, Vector3.up);
-                transform.rotation = Quaternion.Lerp(transform.rotation, target, movement.rotationSharpness * deltaTime);
-            }
         }
 
         void TryStartDodge()
@@ -947,6 +944,10 @@ namespace HeroCharacter
                 dir = forward;
             }
             dodgeDirection = dir.normalized;
+            if (dodge.rotateToDirectionOnStart && dodgeDirection.sqrMagnitude > kSmallNumber)
+            {
+                transform.rotation = Quaternion.LookRotation(dodgeDirection, Vector3.up);
+            }
 
             ConsumeStamina(dodge.staminaCost);
             isSprinting = false;
@@ -961,13 +962,23 @@ namespace HeroCharacter
             if (anim != null && !string.IsNullOrEmpty(animationSettings.rollStateName))
             {
                 int layer = Mathf.Max(0, animationSettings.rollStateLayer);
-                float fade = Mathf.Max(0f, animationSettings.rollCrossfade);
-                anim.CrossFadeInFixedTime(animationSettings.rollStateName, fade, layer, 0f);
+                // Play immediately (avoids exit-time delays from current state/transitions).
+                anim.Play(animationSettings.rollStateName, layer, 0f);
                 anim.Update(0f);
+                dodgeEndsWithAnimation = true;
+                dodgeRollStateName = animationSettings.rollStateName;
+                dodgeRollStateLayer = layer;
             }
             else
             {
                 TrySetTrigger(anim, animationSettings.rollTrigger);
+                if (anim != null)
+                {
+                    anim.Update(0f);
+                }
+                dodgeEndsWithAnimation = false;
+                dodgeRollStateName = string.Empty;
+                dodgeRollStateLayer = 0;
             }
         }
 
@@ -1140,8 +1151,11 @@ namespace HeroCharacter
             cameraSettings.playerCamera.transform.position = SmoothVector(cameraSettings.playerCamera.transform.position, desiredPosition, cameraSettings.thirdPersonPositionSmoothing, deltaTime);
             cameraSettings.playerCamera.transform.rotation = rotation;
 
-            Quaternion target = Quaternion.Euler(0f, yaw, 0f);
-            transform.rotation = Quaternion.Lerp(transform.rotation, target, cameraSettings.bodyAlignmentSmoothing * deltaTime);
+            if (!dodgeActive)
+            {
+                Quaternion target = Quaternion.Euler(0f, yaw, 0f);
+                transform.rotation = Quaternion.Lerp(transform.rotation, target, cameraSettings.bodyAlignmentSmoothing * deltaTime);
+            }
         }
 
         Vector3 GetTargetCameraPosition()
@@ -1268,6 +1282,14 @@ namespace HeroCharacter
                 return;
             }
 
+            if (dodgeActive)
+            {
+                // Prevent locomotion parameters / speed overrides from fighting the roll clip.
+                anim.speed = 1f;
+                UpdateDodgeEndState(anim);
+                return;
+            }
+
             // Fallback to common parameter names if left blank in the inspector.
             if (string.IsNullOrEmpty(animationSettings.forwardVelocityFloat))
             {
@@ -1336,6 +1358,31 @@ namespace HeroCharacter
             }
 
             animator.speed = Mathf.Lerp(animator.speed, targetSpeed, deltaTime * smoothing);
+        }
+
+        void UpdateDodgeEndState(Animator animator)
+        {
+            if (!dodgeActive || !dodgeEndsWithAnimation || animator == null || string.IsNullOrEmpty(dodgeRollStateName))
+            {
+                return;
+            }
+
+            int layer = Mathf.Max(0, dodgeRollStateLayer);
+            if (layer >= animator.layerCount || animator.IsInTransition(layer))
+            {
+                return;
+            }
+
+            var state = animator.GetCurrentAnimatorStateInfo(layer);
+            if (!state.IsName(dodgeRollStateName))
+            {
+                return;
+            }
+
+            if (state.normalizedTime >= 1f)
+            {
+                dodgeActive = false;
+            }
         }
 
         bool TrySetFloat(Animator animator, string parameter, float value, float deltaTime)
@@ -1887,6 +1934,8 @@ namespace HeroCharacter
             public float cooldown = 0.6f;
             public float duration = 0.45f;
             public float dodgeSpeed = 6f;
+            [Tooltip("If true, rotate the character to face the dodge direction at roll start.")]
+            public bool rotateToDirectionOnStart = true;
             public bool invulnerableDuringDodge = true;
             public float invulnerableDuration = 0.25f;
         }
