@@ -1760,20 +1760,30 @@ namespace HeroCharacter
 
         void OnDrawGizmosSelected()
         {
-            if (!debug.drawGroundingGizmos)
+            if (debug.drawGroundingGizmos)
             {
-                return;
+                Gizmos.color = Color.green;
+                Gizmos.DrawWireSphere(GetCapsuleBottomSphereCenter(), GetCapsuleWorldRadius());
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawWireSphere(GetCapsuleBottomSphereCenter() - Vector3.up * movement.groundingProbeDepth, GetCapsuleWorldRadius());
+                if (ground.isGrounded)
+                {
+                    Gizmos.color = Color.cyan;
+                    Gizmos.DrawSphere(ground.point, 0.05f);
+                    Gizmos.DrawLine(ground.point, ground.point + ground.normal);
+                }
             }
 
-            Gizmos.color = Color.green;
-            Gizmos.DrawWireSphere(GetCapsuleBottomSphereCenter(), GetCapsuleWorldRadius());
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(GetCapsuleBottomSphereCenter() - Vector3.up * movement.groundingProbeDepth, GetCapsuleWorldRadius());
-            if (ground.isGrounded)
+            if (debug.drawFootstepGizmos && footsteps.enableFootsteps)
             {
-                Gizmos.color = Color.cyan;
-                Gizmos.DrawSphere(ground.point, 0.05f);
-                Gizmos.DrawLine(ground.point, ground.point + ground.normal);
+                // Visualize time until the next footstep as a color/size change near the feet.
+                float remaining = Mathf.Max(0f, nextStepTime - stepCycle);
+                float interval = Mathf.Max(footsteps.stepInterval, 0.0001f);
+                float progress = 1f - Mathf.Clamp01(remaining / interval); // 0 = just took a step, 1 = about to step
+                Vector3 origin = GetCapsuleBottomSphereCenter() + Vector3.up * 0.05f;
+                float radius = 0.2f + 0.1f * progress;
+                Gizmos.color = Color.Lerp(Color.red, Color.green, progress);
+                Gizmos.DrawWireSphere(origin, radius);
             }
         }
 
@@ -2132,6 +2142,7 @@ namespace HeroCharacter
         class DebugSettings
         {
             public bool drawGroundingGizmos = false;
+            public bool drawFootstepGizmos = false;
         }
 
         #endregion
