@@ -71,8 +71,7 @@ namespace HeroCharacter
         float pitch;
         float cameraDistance;
         float lookRampTimer;
-        float stepCycle;
-        float nextStepTime;
+        float footstepTimer;
 
         bool isGrounded;
         bool wasGrounded;
@@ -239,7 +238,7 @@ namespace HeroCharacter
 
             cameraDistance = cameraSettings.thirdPersonDistance;
             lookRampTimer = 0f;
-            nextStepTime = footsteps.stepInterval;
+            footstepTimer = 0f;
             staminaCurrent = Mathf.Max(0f, stamina.maxStamina);
             events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
             spawnPosition = transform.position;
@@ -1213,14 +1212,15 @@ namespace HeroCharacter
 
             if (!isGrounded || desiredPlanarVelocity.sqrMagnitude < kSmallNumber)
             {
-                stepCycle = 0f;
+                footstepTimer = 0f;
                 return;
             }
 
-            stepCycle += (desiredPlanarVelocity.magnitude + (isSprinting ? footsteps.sprintStepMultiplier : 1f)) * deltaTime;
-            if (stepCycle > nextStepTime)
+            float interval = GetCurrentStepInterval();
+            footstepTimer += deltaTime;
+            if (footstepTimer >= interval)
             {
-                nextStepTime = stepCycle + footsteps.stepInterval;
+                footstepTimer -= interval;
                 PlayFootstep();
             }
         }
@@ -1237,6 +1237,16 @@ namespace HeroCharacter
             footstepAudio.pitch = UnityEngine.Random.Range(footsteps.pitchRange.x, footsteps.pitchRange.y);
             footstepAudio.volume = footsteps.volume;
             footstepAudio.PlayOneShot(clip);
+        }
+
+        float GetCurrentStepInterval()
+        {
+            float interval = Mathf.Max(footsteps.stepInterval, 0.01f);
+            if (isSprinting && footsteps.sprintStepMultiplier > 0f)
+            {
+                interval /= footsteps.sprintStepMultiplier;
+            }
+            return interval;
         }
 
         void UpdateStamina(float deltaTime)
@@ -1777,9 +1787,8 @@ namespace HeroCharacter
             if (debug.drawFootstepGizmos && footsteps.enableFootsteps)
             {
                 // Visualize time until the next footstep as a color/size change near the feet.
-                float remaining = Mathf.Max(0f, nextStepTime - stepCycle);
-                float interval = Mathf.Max(footsteps.stepInterval, 0.0001f);
-                float progress = 1f - Mathf.Clamp01(remaining / interval); // 0 = just took a step, 1 = about to step
+                float interval = GetCurrentStepInterval();
+                float progress = Mathf.Clamp01(footstepTimer / interval); // 0 = just took a step, 1 = about to step
                 Vector3 origin = GetCapsuleBottomSphereCenter() + Vector3.up * 0.05f;
                 float radius = 0.2f + 0.1f * progress;
                 Gizmos.color = Color.Lerp(Color.red, Color.green, progress);
