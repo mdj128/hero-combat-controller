@@ -24,14 +24,14 @@ namespace HeroCharacter
         [SerializeField] float walkSpeed = 1.5f;
         [SerializeField] float sprintSpeed = 3f;
         [SerializeField] float sprintDistance = 3f;
-        [SerializeField] float stoppingBuffer = 0.4f;
+        [SerializeField] float stoppingBuffer = 0.6f;
 
         [Header("Damage")]
         [SerializeField] float damageScale = 1f;
         [SerializeField] float attackDelay = 1f;
 
         [Header("Attack Motion")]
-        [SerializeField] bool enableAttackMotion = true;
+        [SerializeField] bool enableAttackMotion = false;
         [SerializeField, Min(0f)] float lungeDistance = 0.6f;
         [SerializeField, Min(0.01f)] float lungeSpeed = 4f;
         [SerializeField, Min(0f)] float retreatDistance = 0.4f;
@@ -40,11 +40,6 @@ namespace HeroCharacter
 
         [Header("UI")]
         [SerializeField] bool attachHealthBar = true;
-        [SerializeField] Vector3 healthBarOffset = new Vector3(0f, 1.6f, 0f);
-        [SerializeField] Vector2 healthBarSize = new Vector2(1.2f, 0.18f);
-        [SerializeField, Min(0.01f)] float healthBarScale = 1f;
-        [SerializeField] bool healthBarAlwaysVisible;
-        [SerializeField, HideInInspector] int healthBarConfigVersion;
 
         [Header("Feedback")]
         [SerializeField] bool attachFloatingText = true;
@@ -61,8 +56,6 @@ namespace HeroCharacter
         [SerializeField] float groundOffset = 0.02f;
         [SerializeField] float groundSnapSpeed = 15f;
 
-        const int CurrentHealthBarConfigVersion = 1;
-
         CharacterCombatAgent combatAgent;
         IDamageable currentTarget;
         Transform targetTransform;
@@ -73,8 +66,6 @@ namespace HeroCharacter
         FloatingCombatTextSpawner floatingText;
         Vector3 lastTargetPosition;
         Rigidbody body;
-        Collider[] cachedColliders;
-        bool collidersDisabled;
         bool attackLungeActive;
         bool attackRetreatActive;
         float lungeRemaining;
@@ -95,7 +86,6 @@ namespace HeroCharacter
             spawnPosition = transform.position;
             EnsureHealthBar();
             EnsureFloatingText();
-            CacheColliders();
         }
 
         void OnEnable()
@@ -114,15 +104,6 @@ namespace HeroCharacter
 
         void OnValidate()
         {
-            if (healthBarConfigVersion < CurrentHealthBarConfigVersion)
-            {
-                attachHealthBar = true;
-                healthBarConfigVersion = CurrentHealthBarConfigVersion;
-            }
-
-            healthBarScale = Mathf.Max(0.01f, healthBarScale);
-            healthBarSize.x = Mathf.Max(0.01f, healthBarSize.x);
-            healthBarSize.y = Mathf.Max(0.01f, healthBarSize.y);
             EnsureFloatingText();
             ConfigureHealthBar(healthBar);
             ConfigureFloatingText(floatingText);
@@ -503,12 +484,10 @@ namespace HeroCharacter
 
         void HandleAgentDied()
         {
-            DisableColliders();
         }
 
         void HandleAgentRevived()
         {
-            EnableColliders();
         }
 
         void HandleAgentAttackPerformed()
@@ -543,51 +522,6 @@ namespace HeroCharacter
             attackRetreatActive = true;
         }
 
-        void CacheColliders()
-        {
-            cachedColliders = GetComponentsInChildren<Collider>(true);
-        }
-
-        void DisableColliders()
-        {
-            if (cachedColliders == null || cachedColliders.Length == 0)
-            {
-                CacheColliders();
-            }
-
-            foreach (var col in cachedColliders)
-            {
-                if (col != null)
-                {
-                    col.enabled = false;
-                }
-            }
-
-            collidersDisabled = true;
-        }
-
-        void EnableColliders()
-        {
-            if (!collidersDisabled)
-            {
-                return;
-            }
-
-            if (cachedColliders == null || cachedColliders.Length == 0)
-            {
-                CacheColliders();
-            }
-
-            foreach (var col in cachedColliders)
-            {
-                if (col != null)
-                {
-                    col.enabled = true;
-                }
-            }
-
-            collidersDisabled = false;
-        }
 
         void EnsureHealthBar()
         {
@@ -631,10 +565,6 @@ namespace HeroCharacter
             }
 
             bar.Anchor = transform;
-            bar.WorldOffset = healthBarOffset;
-            bar.BarSize = healthBarSize;
-            bar.UniformScale = healthBarScale;
-            bar.AlwaysVisible = healthBarAlwaysVisible;
             bar.BindAgent(combatAgent);
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -31,6 +32,8 @@ namespace HeroCharacter
         [SerializeField] DebugSettings debug = new DebugSettings();
         [SerializeField] StaminaSettings stamina = new StaminaSettings();
         [SerializeField] DodgeSettings dodge = new DodgeSettings();
+        [SerializeField, Min(0f)] float respawnDelay = 0f;
+        [SerializeField] bool autoRespawnOnDeath = true;
 
         [Header("Feedback")]
         [SerializeField] bool attachFloatingCombatText = true;
@@ -89,6 +92,9 @@ namespace HeroCharacter
         GroundState ground = new GroundState();
         Vector3 pendingRootMotion;
         Vector3 desiredPlanarVelocity;
+        Vector3 spawnPosition;
+        Quaternion spawnRotation;
+        bool respawnInProgress;
 
         const float kSmallNumber = 0.0001f;
 
@@ -236,6 +242,8 @@ namespace HeroCharacter
             nextStepTime = footsteps.stepInterval;
             staminaCurrent = Mathf.Max(0f, stamina.maxStamina);
             events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
+            spawnPosition = transform.position;
+            spawnRotation = transform.rotation;
 
             CacheAudioSource();
             InitialiseCameraState();
@@ -704,6 +712,11 @@ namespace HeroCharacter
             var animator = animationSettings.GetAnimator();
             TrySetTrigger(animator, animationSettings.deathTrigger);
             events.InvokeDeath();
+
+            if (autoRespawnOnDeath && !respawnInProgress && isActiveAndEnabled)
+            {
+                StartCoroutine(RespawnRoutine());
+            }
         }
 
         void HandleCombatRevived()
@@ -726,6 +739,27 @@ namespace HeroCharacter
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
             }
+        }
+
+        IEnumerator RespawnRoutine()
+        {
+            respawnInProgress = true;
+            if (respawnDelay > 0f)
+            {
+                yield return new WaitForSeconds(respawnDelay);
+            }
+
+            // Reset position/orientation and velocity before reviving.
+            transform.position = spawnPosition;
+            transform.rotation = spawnRotation;
+            if (body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            combatAgent?.Revive(1f);
+            respawnInProgress = false;
         }
 
         void HandleCombatAttackStarted()
