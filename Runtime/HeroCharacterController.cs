@@ -1227,13 +1227,13 @@ namespace HeroCharacter
 
         void PlayFootstep()
         {
-            var profile = footsteps.GetProfileForGround(ground);
-            if (profile == null || profile.footstepClips.Count == 0)
+            var clips = footsteps.footstepClips;
+            if (clips == null || clips.Count == 0)
             {
                 return;
             }
 
-            AudioClip clip = profile.footstepClips[UnityEngine.Random.Range(0, profile.footstepClips.Count)];
+            AudioClip clip = clips[UnityEngine.Random.Range(0, clips.Count)];
             footstepAudio.pitch = UnityEngine.Random.Range(footsteps.pitchRange.x, footsteps.pitchRange.y);
             footstepAudio.volume = footsteps.volume;
             footstepAudio.PlayOneShot(clip);
@@ -1914,30 +1914,7 @@ namespace HeroCharacter
             public float sprintStepMultiplier = 1.4f;
             public float volume = 0.8f;
             public Vector2 pitchRange = new Vector2(0.95f, 1.05f);
-            public List<GroundMaterialProfile> profiles = new List<GroundMaterialProfile>();
-
-            public GroundMaterialProfile GetProfileForGround(GroundState ground)
-            {
-                if (!ground.isGrounded)
-                {
-                    return null;
-                }
-
-                foreach (var profile in profiles)
-                {
-                    if (profile == null)
-                    {
-                        continue;
-                    }
-
-                    if (profile.Matches(ground))
-                    {
-                        return profile;
-                    }
-                }
-
-                return null;
-            }
+            public List<AudioClip> footstepClips = new List<AudioClip>();
         }
 
         [Serializable]
@@ -2166,63 +2143,6 @@ namespace HeroCharacter
         InvertX,
         InvertY,
         InvertBoth
-    }
-
-    [Serializable]
-    public class GroundMaterialProfile
-    {
-        public GroundMatchMode matchMode = GroundMatchMode.Material;
-        public List<Material> materials = new List<Material>();
-        public List<PhysicsMaterial> physicsMaterials = new List<PhysicsMaterial>();
-        public List<TerrainLayer> terrainLayers = new List<TerrainLayer>();
-        public LayerMask additionalLayerMask = 0;
-        public List<AudioClip> footstepClips = new List<AudioClip>();
-
-        public bool Matches(GroundState ground)
-        {
-            if (!ground.isGrounded)
-            {
-                return false;
-            }
-
-            switch (matchMode)
-            {
-                case GroundMatchMode.Material:
-                    if (ground.material != null && materials.Contains(ground.material))
-                    {
-                        return true;
-                    }
-                    break;
-                case GroundMatchMode.PhysicsMaterial:
-                    if (ground.physicsMaterial != null && physicsMaterials.Contains(ground.physicsMaterial))
-                    {
-                        return true;
-                    }
-                    break;
-                case GroundMatchMode.TerrainLayer:
-                    if (ground.terrainLayer != null && terrainLayers.Contains(ground.terrainLayer))
-                    {
-                        return true;
-                    }
-                    break;
-                case GroundMatchMode.LayerMask:
-                    if (ground.collider != null && ((1 << ground.collider.gameObject.layer) & additionalLayerMask) != 0)
-                    {
-                        return true;
-                    }
-                    break;
-            }
-
-            return false;
-        }
-    }
-
-    public enum GroundMatchMode
-    {
-        Material,
-        PhysicsMaterial,
-        TerrainLayer,
-        LayerMask
     }
 
     [Serializable]
