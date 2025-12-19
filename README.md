@@ -52,6 +52,9 @@ Defaults include:
 
 ## Release Notes
 
+### 1.2.1
+- Dodge/roll now enforces at least 1s of invulnerability after it starts (configurable, but clamped to 1s minimum) to stop chip damage during a roll.
+
 ### 1.2.0
 - Added stamina system (drain on sprint/jump, regen when resting) with HUD bar.
 - HUD prefab updated; binder listens to new stamina events.

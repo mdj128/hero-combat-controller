@@ -14,7 +14,7 @@ namespace HeroCharacter
 {
     /// <summary>
     /// Custom character controller for combat and stats systems.
-    /// Handles third-person camera control, grounded locomotion, sprinting and footstep audio.
+    /// Handles third-person camera control, grounded locomotion, sprinting and combat.
     /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(CapsuleCollider))]
@@ -23,7 +23,6 @@ namespace HeroCharacter
     {
         [SerializeField] CameraSettings cameraSettings = new CameraSettings();
         [SerializeField] MovementSettings movement = new MovementSettings();
-        [SerializeField] FootstepSettings footsteps = new FootstepSettings();
         [SerializeField] InteractionSettings interaction = new InteractionSettings();
         [SerializeField] CrosshairSettings crosshair = new CrosshairSettings();
         [SerializeField] AnimationSettings animationSettings = new AnimationSettings();
@@ -43,7 +42,6 @@ namespace HeroCharacter
 
         Rigidbody body;
         CapsuleCollider capsule;
-        AudioSource footstepAudio;
         CharacterCombatAgent combatAgent;
         HeroCrosshair crosshairUI;
         float staminaCurrent;
@@ -71,8 +69,6 @@ namespace HeroCharacter
         float pitch;
         float cameraDistance;
         float lookRampTimer;
-        float footstepTimer;
-
         bool isGrounded;
         bool wasGrounded;
         bool isSprinting;
@@ -94,7 +90,6 @@ namespace HeroCharacter
         Vector3 spawnPosition;
         Quaternion spawnRotation;
         bool respawnInProgress;
-
         const float kSmallNumber = 0.0001f;
 
 #if ENABLE_INPUT_SYSTEM
@@ -221,7 +216,6 @@ namespace HeroCharacter
         void Reset()
         {
             cameraSettings.playerCamera = GetComponentInChildren<Camera>();
-            footsteps.audioSource = GetComponent<AudioSource>();
         }
 
         void Awake()
@@ -238,13 +232,11 @@ namespace HeroCharacter
 
             cameraDistance = cameraSettings.thirdPersonDistance;
             lookRampTimer = 0f;
-            footstepTimer = 0f;
             staminaCurrent = Mathf.Max(0f, stamina.maxStamina);
             events.InvokeStaminaChanged(staminaCurrent, stamina.maxStamina);
             spawnPosition = transform.position;
             spawnRotation = transform.rotation;
 
-            CacheAudioSource();
             InitialiseCameraState();
 
             if (combatAgent == null)
@@ -364,7 +356,7 @@ namespace HeroCharacter
             dodge.cooldown = Mathf.Max(0f, dodge.cooldown);
             dodge.duration = Mathf.Max(0.05f, dodge.duration);
             dodge.dodgeSpeed = Mathf.Max(0f, dodge.dodgeSpeed);
-            dodge.invulnerableDuration = Mathf.Max(0f, dodge.invulnerableDuration);
+            dodge.invulnerableDuration = Mathf.Max(1f, dodge.invulnerableDuration);
         }
 #endif
 
@@ -432,7 +424,6 @@ namespace HeroCharacter
             UpdateStateMachine();
             UpdateCamera(Time.deltaTime);
             UpdateAnimator(Time.deltaTime);
-            UpdateFootsteps(Time.deltaTime);
             HandleInteractions();
             UpdateStamina(Time.deltaTime);
             ClearTransientInputs();
@@ -989,7 +980,7 @@ namespace HeroCharacter
             dodgeActive = true;
             dodgeEndTime = Time.time + Mathf.Max(0.05f, dodge.duration);
             nextDodgeTime = Time.time + Mathf.Max(0f, dodge.cooldown);
-            dodgeInvulnEndTime = Time.time + Mathf.Max(0f, dodge.invulnerableDuration);
+            dodgeInvulnEndTime = Time.time + Mathf.Max(1f, dodge.invulnerableDuration);
 
             var anim = animationSettings.GetAnimator();
             if (anim != null && !string.IsNullOrEmpty(animationSettings.rollStateName))
@@ -1201,54 +1192,6 @@ namespace HeroCharacter
 
         #endregion
 
-        #region Footsteps
-
-        void UpdateFootsteps(float deltaTime)
-        {
-            if (!footsteps.enableFootsteps || footstepAudio == null)
-            {
-                return;
-            }
-
-            if (!isGrounded || desiredPlanarVelocity.sqrMagnitude < kSmallNumber)
-            {
-                footstepTimer = 0f;
-                return;
-            }
-
-            float interval = GetCurrentStepInterval();
-            footstepTimer += deltaTime;
-            if (footstepTimer >= interval)
-            {
-                footstepTimer -= interval;
-                PlayFootstep();
-            }
-        }
-
-        void PlayFootstep()
-        {
-            var clips = footsteps.footstepClips;
-            if (clips == null || clips.Count == 0)
-            {
-                return;
-            }
-
-            AudioClip clip = clips[UnityEngine.Random.Range(0, clips.Count)];
-            footstepAudio.pitch = UnityEngine.Random.Range(footsteps.pitchRange.x, footsteps.pitchRange.y);
-            footstepAudio.volume = footsteps.volume;
-            footstepAudio.PlayOneShot(clip);
-        }
-
-        float GetCurrentStepInterval()
-        {
-            float interval = Mathf.Max(footsteps.stepInterval, 0.01f);
-            if (isSprinting && footsteps.sprintStepMultiplier > 0f)
-            {
-                interval /= footsteps.sprintStepMultiplier;
-            }
-            return interval;
-        }
-
         void UpdateStamina(float deltaTime)
         {
             if (stamina.maxStamina <= 0f)
@@ -1297,19 +1240,6 @@ namespace HeroCharacter
                 isSprinting = false;
             }
         }
-
-        void CacheAudioSource()
-        {
-            footstepAudio = footsteps.audioSource != null ? footsteps.audioSource : GetComponent<AudioSource>();
-            if (footstepAudio == null && footsteps.enableFootsteps)
-            {
-                footstepAudio = gameObject.AddComponent<AudioSource>();
-                footstepAudio.spatialBlend = 1f;
-                footstepAudio.playOnAwake = false;
-            }
-        }
-
-        #endregion
 
         #region Animator & Interaction
 
@@ -1784,16 +1714,6 @@ namespace HeroCharacter
                 }
             }
 
-            if (debug.drawFootstepGizmos && footsteps.enableFootsteps)
-            {
-                // Visualize time until the next footstep as a color/size change near the feet.
-                float interval = GetCurrentStepInterval();
-                float progress = Mathf.Clamp01(footstepTimer / interval); // 0 = just took a step, 1 = about to step
-                Vector3 origin = GetCapsuleBottomSphereCenter() + Vector3.up * 0.05f;
-                float radius = 0.2f + 0.1f * progress;
-                Gizmos.color = Color.Lerp(Color.red, Color.green, progress);
-                Gizmos.DrawWireSphere(origin, radius);
-            }
         }
 
         #endregion
@@ -1925,18 +1845,6 @@ namespace HeroCharacter
         }
 
         [Serializable]
-        class FootstepSettings
-        {
-            public bool enableFootsteps = true;
-            public AudioSource audioSource;
-            public float stepInterval = 0.4f;
-            public float sprintStepMultiplier = 1.4f;
-            public float volume = 0.8f;
-            public Vector2 pitchRange = new Vector2(0.95f, 1.05f);
-            public List<AudioClip> footstepClips = new List<AudioClip>();
-        }
-
-        [Serializable]
         class InteractionSettings
         {
             public float interactRange = 3f;
@@ -1967,7 +1875,8 @@ namespace HeroCharacter
             [Tooltip("If true, rotate the character to face the dodge direction at roll start.")]
             public bool rotateToDirectionOnStart = true;
             public bool invulnerableDuringDodge = true;
-            public float invulnerableDuration = 0.25f;
+            [Tooltip("How long the hero is invulnerable after starting a dodge/roll.")]
+            public float invulnerableDuration = 1f;
         }
 
         [Serializable]
@@ -2151,7 +2060,6 @@ namespace HeroCharacter
         class DebugSettings
         {
             public bool drawGroundingGizmos = false;
-            public bool drawFootstepGizmos = false;
         }
 
         #endregion
